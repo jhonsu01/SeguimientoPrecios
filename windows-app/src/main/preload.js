@@ -25,7 +25,7 @@ contextBridge.exposeInMainWorld('api', {
   keyGet: () => ipcRenderer.invoke('key:get'),
   keySet: (k) => ipcRenderer.invoke('key:set', k),
   ocrScan: () => ipcRenderer.invoke('ocr:scan'),
-  ocrAdd: (res) => ipcRenderer.invoke('ocr:add', res),
+  ocrAdd: (res, sumar) => ipcRenderer.invoke('ocr:add', res, sumar),
 
   // Moneda
   monedaGet: () => ipcRenderer.invoke('moneda:get'),

@@ -155,26 +155,33 @@ function alacenaSave(a) {
 }
 
 // ---- OCR: alta masiva ----
-function agregarDesdeOcr(res) {
+function agregarDesdeOcr(res, sumarAlacena) {
   const productos = productosList();
+  const incrementos = {};
   (res.productos || []).forEach((item) => {
     if (!item.nombre) return;
+    // No duplica: reutiliza el producto si ya existe (por nombre).
     let prod = productos.find((x) => x.nombre.toLowerCase() === String(item.nombre).toLowerCase());
     if (!prod) {
-      const id = productoSave({
-        nombre: item.nombre,
-        unidadMedida: item.unidad || 'unidad'
-      });
-      prod = { id };
-      productos.push({ id, nombre: item.nombre });
+      const id = productoSave({ nombre: item.nombre, unidadMedida: item.unidad || 'unidad' });
+      prod = { id, nombre: item.nombre };
+      productos.push(prod);
     }
-    precioSave({
-      productoId: prod.id,
-      precio: Number(item.precio) || 0,
-      cantidad: Number(item.cantidad) || 1,
-      tienda: res.tienda || ''
-    });
+    const cant = Number(item.cantidad) || 1;
+    precioSave({ productoId: prod.id, precio: Number(item.precio) || 0, cantidad: cant, tienda: res.tienda || '' });
+    if (sumarAlacena) incrementos[prod.id] = (incrementos[prod.id] || 0) + cant;
   });
+  if (sumarAlacena) {
+    const alac = alacenaList();
+    Object.keys(incrementos).forEach((pid) => {
+      const a = alac.find((x) => x.productoId === pid) || { cantidadActual: 0, cantidadMinima: 1 };
+      alacenaSave({
+        productoId: pid,
+        cantidadActual: (a.cantidadActual || 0) + incrementos[pid],
+        cantidadMinima: a.cantidadMinima != null ? a.cantidadMinima : 1
+      });
+    });
+  }
 }
 
 // ---- Restaurar desde un respaldo JSON (import multiplataforma) ----

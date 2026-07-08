@@ -48,7 +48,15 @@ if (!window.api) {
     monedaGet: async () => 'COP', monedaSet: async () => {},
     openExternal: async (url) => { window.open(url, '_blank'); },
     ocrScan: async () => ({ cancelado: false, resultado: { tienda: 'Demo Market', productos: [{ nombre: 'Pan tajado', precio: 5200, cantidad: 1, unidad: 'unidad' }, { nombre: 'Huevos AA x12', precio: 12500, cantidad: 1, unidad: 'unidad' }] } }),
-    ocrAdd: async (res) => { (res.productos || []).forEach(it => { const id = uid(); mem.productos.push({ id, nombre: it.nombre, categoria: 'General', unidadMedida: it.unidad || 'unidad' }); mem.precios.push({ id: uid(), productoId: id, precio: it.precio, cantidad: it.cantidad || 1, tipoPrecio: 'unitario', tienda: res.tienda || '', fecha: Date.now() }); }); },
+    ocrAdd: async (res, sumar) => {
+      (res.productos || []).forEach(it => {
+        let prod = mem.productos.find(p => p.nombre.toLowerCase() === String(it.nombre).toLowerCase());
+        if (!prod) { prod = { id: uid(), nombre: it.nombre, categoria: 'General', unidadMedida: it.unidad || 'unidad' }; mem.productos.push(prod); }
+        const cant = it.cantidad || 1;
+        mem.precios.push({ id: uid(), productoId: prod.id, precio: it.precio, cantidad: cant, tipoPrecio: 'unitario', tienda: res.tienda || '', fecha: Date.now() });
+        if (sumar) { let a = mem.alacena.find(x => x.productoId === prod.id); if (!a) { a = { productoId: prod.id, cantidadActual: 0, cantidadMinima: 1 }; mem.alacena.push(a); } a.cantidadActual += cant; }
+      });
+    },
     backupExport: async () => ({ ok: true, ruta: 'demo-backup.zip' }),
     backupImport: async () => ({ ok: true })
   };
@@ -230,7 +238,7 @@ function viewDashboard() {
 
 function viewProductos() {
   const filas = state.productos.map(p => `
-    <div class="list-item" data-open="${p.id}">
+    <div class="list-item" data-open="${p.id}" data-nombre="${esc(p.nombre.toLowerCase())}">
       <div class="grow">
         <div class="item-name">${esc(p.nombre)}</div>
         <div class="item-sub">${esc(p.categoria)} &middot; ${esc(p.unidadMedida)}${p.tipo ? ' &middot; ' + esc(p.tipo) : ''}</div>
@@ -247,6 +255,7 @@ function viewProductos() {
         <button class="btn btn-primary" id="nuevo-producto">+ Nuevo producto</button>
       </div>
     </div>
+    ${state.productos.length ? '<input id="buscar-prod" class="buscador" placeholder="Buscar producto..." />' : ''}
     ${state.productos.length ? filas : '<div class="empty">Toca "+ Nuevo producto" o escanea una factura.</div>'}
   `;
 }
@@ -257,7 +266,7 @@ function viewAlacena() {
   const filas = state.productos.map(p => {
     const a = itemDe(p);
     const low = a.cantidadActual <= a.cantidadMinima;
-    return `<div class="list-item" style="cursor:default">
+    return `<div class="list-item" style="cursor:default" data-nombre="${esc(p.nombre.toLowerCase())}">
       <div class="grow">
         <div class="item-name">${esc(p.nombre)}</div>
         <div class="item-sub ${low ? 'low' : 'ok'}">Stock: ${fmtNum(a.cantidadActual)} &middot; min: ${fmtNum(a.cantidadMinima)} ${esc(p.unidadMedida)}</div>
@@ -275,6 +284,7 @@ function viewAlacena() {
     <h1 class="page-title">Mi Alacena</h1>
     ${bajo.length ? `<div class="card shopping"><div class="title">&#128722; Lista de compras (${bajo.length})</div><div style="margin-top:6px">${bajo.map(p => esc(p.nombre)).join(', ')}</div></div>` : ''}
     <div class="section-title">Inventario</div>
+    ${state.productos.length ? '<input id="buscar-prod" class="buscador" placeholder="Buscar producto..." />' : ''}
     ${state.productos.length ? filas : '<div class="empty">Agrega productos para gestionar tu inventario.</div>'}
   `;
 }
@@ -442,6 +452,14 @@ function attach() {
   const selP = $('#sel-producto');
   if (selP) selP.addEventListener('change', () => { state.detalleId = selP.value; render(); });
 
+  const buscar = $('#buscar-prod');
+  if (buscar) buscar.addEventListener('input', () => {
+    const q = buscar.value.toLowerCase();
+    $$('#content .list-item[data-nombre]').forEach((el) => {
+      el.style.display = el.dataset.nombre.includes(q) ? '' : 'none';
+    });
+  });
+
   if (state.view === 'ajustes') attachAjustes();
 
   const canvas = $('#chart');
@@ -534,7 +552,7 @@ function drawChart(canvas, precios) {
   const vals = pts.map(p => p.precio);
   const minV = Math.min(...vals), maxV = Math.max(...vals);
   const rango = (maxV - minV) || 1;
-  const L = 72, R = 14, T = 14, B = 26;
+  const L = 72, R = 14, T = 14, B = 34;
   const w = W - L - R, h = H - T - B;
 
   ctx.font = '10px Segoe UI';
@@ -588,6 +606,18 @@ function drawChart(canvas, precios) {
     ctx.fillStyle = '#fff';
     ctx.fill();
   });
+
+  // Fechas de cada registro en el eje X (max ~5 etiquetas)
+  ctx.fillStyle = '#94A3B8';
+  ctx.textAlign = 'center';
+  ctx.font = '9px Segoe UI';
+  const fmtF = (ms) => { const d = new Date(ms); return String(d.getDate()).padStart(2, '0') + '/' + String(d.getMonth() + 1).padStart(2, '0'); };
+  const maxLabels = 5;
+  const paso = pts.length <= maxLabels ? 1 : Math.ceil(pts.length / maxLabels);
+  pts.forEach((p, i) => {
+    if (i % paso === 0 || i === pts.length - 1) ctx.fillText(fmtF(p.fecha), px(i), H - 8);
+  });
+  ctx.textAlign = 'left';
 }
 
 // ---------- Modales ----------
@@ -606,7 +636,7 @@ function modalMensaje(titulo, msg) {
 }
 
 let scanReader = null;
-function openCameraScan(onResult) {
+async function openCameraScan(onResult) {
   if (typeof ZXing === 'undefined') {
     modalMensaje('Escaner', 'La libreria de escaneo no esta disponible.');
     return;
@@ -615,7 +645,9 @@ function openCameraScan(onResult) {
   const box = $('#scan-modal');
   box.innerHTML = `
     <h3>Escanear codigo de barras</h3>
-    <video id="scan-video" muted autoplay playsinline></video>
+    <label>Camara</label>
+    <select id="scan-cam"><option value="">Camara predeterminada</option></select>
+    <video id="scan-video" muted autoplay playsinline style="margin-top:8px"></video>
     <div class="setting-desc" id="scan-msg" style="margin-top:8px">Apunta la camara al codigo de barras...</div>
     <div class="modal-actions"><button class="btn btn-ghost" id="scan-cancel">Cerrar</button></div>`;
   ov.classList.remove('hidden');
@@ -625,15 +657,28 @@ function openCameraScan(onResult) {
     box.innerHTML = '';
   };
   $('#scan-cancel').addEventListener('click', cerrar);
+  const cb = (result) => { if (result) { const t = result.getText(); cerrar(); onResult(t); } };
+  const iniciar = (deviceId) => {
+    try {
+      if (scanReader) { try { scanReader.reset(); } catch (e) {} }
+      scanReader = new ZXing.BrowserMultiFormatReader();
+      scanReader.decodeFromVideoDevice(deviceId || undefined, 'scan-video', cb);
+    } catch (e) {
+      const m = $('#scan-msg');
+      if (m) m.textContent = 'No se pudo iniciar la camara: ' + (e.message || e);
+    }
+  };
+  iniciar(null);
+  // Poblar el selector con las camaras instaladas (tras iniciar, para tener etiquetas)
   try {
-    scanReader = new ZXing.BrowserMultiFormatReader();
-    scanReader.decodeFromVideoDevice(null, 'scan-video', (result) => {
-      if (result) { const t = result.getText(); cerrar(); onResult(t); }
-    });
-  } catch (e) {
-    const m = $('#scan-msg');
-    if (m) m.textContent = 'No se pudo iniciar la camara: ' + (e.message || e);
-  }
+    const devices = await navigator.mediaDevices.enumerateDevices();
+    const cams = devices.filter((d) => d.kind === 'videoinput');
+    const sel = $('#scan-cam');
+    if (sel && cams.length) {
+      sel.innerHTML = cams.map((c, i) => `<option value="${c.deviceId}">${esc(c.label || ('Camara ' + (i + 1)))}</option>`).join('');
+      sel.addEventListener('change', () => iniciar(sel.value));
+    }
+  } catch (e) { /* enumerateDevices no disponible */ }
 }
 
 function modalProducto(prod) {
@@ -771,7 +816,8 @@ function modalOcr(res) {
   openModal(`
     <h3>Factura leida</h3>
     ${res.tienda ? `<div style="margin-bottom:8px">Tienda: <b>${esc(res.tienda)}</b></div>` : ''}
-    <div style="max-height:320px;overflow:auto">${lista}</div>
+    <div style="max-height:300px;overflow:auto">${lista}</div>
+    ${items.length ? `<label style="display:flex;align-items:center;gap:8px;margin-top:12px;cursor:pointer"><input type="checkbox" id="ocr-alacena" style="width:auto" /> Sumar cantidades a Mi Alacena</label>` : ''}
     <div class="modal-actions">
       <button class="btn btn-ghost" id="ocr-cancel">Cancelar</button>
       <button class="btn btn-primary" id="ocr-add" ${items.length ? '' : 'disabled'}>Agregar ${items.length}</button>
@@ -780,7 +826,12 @@ function modalOcr(res) {
   $('#ocr-cancel').addEventListener('click', closeModal);
   const add = $('#ocr-add');
   if (items.length) {
-    add.addEventListener('click', async () => { await window.api.ocrAdd(res); closeModal(); await cargar(); });
+    add.addEventListener('click', async () => {
+      const sumar = !!($('#ocr-alacena') && $('#ocr-alacena').checked);
+      await window.api.ocrAdd(res, sumar);
+      closeModal();
+      await cargar();
+    });
   }
 }
 

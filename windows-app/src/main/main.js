@@ -72,7 +72,7 @@ function registrarIpc() {
     const res = await ocr.run(r.filePaths[0]);
     return { cancelado: false, resultado: res };
   });
-  ipcMain.handle('ocr:add', (_e, res) => db.agregarDesdeOcr(res));
+  ipcMain.handle('ocr:add', (_e, res, sumar) => db.agregarDesdeOcr(res, sumar));
 
   ipcMain.handle('backup:export', async () => {
     const r = await dialog.showSaveDialog(mainWindow, {
