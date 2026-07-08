@@ -23,6 +23,10 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.jhonsu.seguimientoprecios.data.Precio
 import com.jhonsu.seguimientoprecios.ui.moneda
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
+import kotlin.math.ceil
 
 /**
  * Grafico de linea de la evolucion de un precio en el tiempo.
@@ -65,7 +69,7 @@ fun PriceChart(
             val leftPad = 64f
             val rightPad = 12f
             val topPad = 12f
-            val bottomPad = 24f
+            val bottomPad = 34f
             val w = size.width - leftPad - rightPad
             val h = size.height - topPad - bottomPad
 
@@ -145,6 +149,33 @@ fun PriceChart(
                     radius = 2f,
                     center = Offset(px(i), py(p.precio))
                 )
+            }
+
+            // Fechas de cada registro en el eje X (maximo ~5 etiquetas para no saturar)
+            val fmtFecha = SimpleDateFormat("dd/MM", Locale.getDefault())
+            val n = puntos.size
+            val maxLabels = 5
+            val paso = if (n <= maxLabels) 1 else ceil(n / maxLabels.toDouble()).toInt()
+            val paintFecha = android.graphics.Paint().apply {
+                color = android.graphics.Color.argb(
+                    (labelColor.alpha * 255).toInt(),
+                    (labelColor.red * 255).toInt(),
+                    (labelColor.green * 255).toInt(),
+                    (labelColor.blue * 255).toInt()
+                )
+                textSize = 9.sp.toPx()
+                isAntiAlias = true
+                textAlign = android.graphics.Paint.Align.CENTER
+            }
+            for (i in puntos.indices) {
+                if (i % paso == 0 || i == n - 1) {
+                    drawContext.canvas.nativeCanvas.drawText(
+                        fmtFecha.format(Date(puntos[i].fecha)),
+                        px(i),
+                        size.height - 8f,
+                        paintFecha
+                    )
+                }
             }
         }
     }

@@ -111,21 +111,30 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         return OpenAiOcr.extraer(key, bytes, mime)
     }
 
-    fun agregarDesdeOcr(res: OcrResultado) = viewModelScope.launch {
+    fun agregarDesdeOcr(res: OcrResultado, sumarAlacena: Boolean = false) = viewModelScope.launch {
+        val incrementos = HashMap<String, Double>()
         res.items.forEach { item ->
+            // No duplica: reutiliza el producto si ya existe (por nombre).
             val existente = productos.value.firstOrNull { it.nombre.equals(item.nombre, ignoreCase = true) }
             val producto = existente ?: Producto(
                 nombre = item.nombre,
                 unidadMedida = item.unidad.ifBlank { "unidad" }
             ).also { repo.guardarProducto(it) }
+            val cantidad = if (item.cantidad > 0) item.cantidad else 1.0
             repo.guardarPrecio(
                 Precio(
                     productoId = producto.id,
                     precio = item.precio,
-                    cantidad = if (item.cantidad > 0) item.cantidad else 1.0,
+                    cantidad = cantidad,
                     tienda = res.tienda
                 )
             )
+            if (sumarAlacena) incrementos[producto.id] = (incrementos[producto.id] ?: 0.0) + cantidad
+        }
+        // Suma las unidades compradas al inventario (Mi Alacena).
+        incrementos.forEach { (pid, delta) ->
+            val actual = alacena.value.find { it.productoId == pid } ?: Alacena(pid)
+            repo.guardarAlacena(actual.copy(cantidadActual = actual.cantidadActual + delta))
         }
         registrarTiendaSiNueva(res.tienda)
     }

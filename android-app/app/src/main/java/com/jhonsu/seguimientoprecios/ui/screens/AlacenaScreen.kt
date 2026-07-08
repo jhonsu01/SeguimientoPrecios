@@ -14,7 +14,9 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Remove
+import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.ShoppingCart
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -48,6 +50,7 @@ fun AlacenaScreen(vm: AppViewModel, onAbrirProducto: (String) -> Unit) {
     val productos by vm.productos.collectAsState()
     val alacena by vm.alacena.collectAsState()
     var editando by remember { mutableStateOf<Producto?>(null) }
+    var busqueda by remember { mutableStateOf("") }
 
     fun itemDe(p: Producto): Alacena =
         alacena.find { it.productoId == p.id } ?: Alacena(p.id, 0.0, 1.0)
@@ -74,51 +77,62 @@ fun AlacenaScreen(vm: AppViewModel, onAbrirProducto: (String) -> Unit) {
             return@Scaffold
         }
 
-        LazyColumn(
-            modifier = Modifier.padding(padding).fillMaxSize().padding(horizontal = 16.dp, vertical = 8.dp),
-            verticalArrangement = Arrangement.spacedBy(10.dp)
-        ) {
-            if (bajoMinimo.isNotEmpty()) {
-                item {
-                    Card(
-                        modifier = Modifier.fillMaxWidth(),
-                        colors = CardDefaults.cardColors(containerColor = Ambar.copy(alpha = 0.14f))
-                    ) {
-                        Column(Modifier.padding(14.dp)) {
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                Icon(Icons.Filled.ShoppingCart, null, tint = Ambar, modifier = Modifier.size(20.dp))
+        Column(Modifier.padding(padding).fillMaxSize()) {
+            OutlinedTextField(
+                value = busqueda,
+                onValueChange = { busqueda = it },
+                label = { Text("Buscar producto") },
+                singleLine = true,
+                leadingIcon = { Icon(Icons.Filled.Search, contentDescription = null) },
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp)
+            )
+            val filtrados = productos.filter { it.nombre.contains(busqueda, ignoreCase = true) }
+            LazyColumn(
+                modifier = Modifier.fillMaxSize().padding(horizontal = 16.dp),
+                verticalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                if (bajoMinimo.isNotEmpty() && busqueda.isBlank()) {
+                    item {
+                        Card(
+                            modifier = Modifier.fillMaxWidth(),
+                            colors = CardDefaults.cardColors(containerColor = Ambar.copy(alpha = 0.14f))
+                        ) {
+                            Column(Modifier.padding(14.dp)) {
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Icon(Icons.Filled.ShoppingCart, null, tint = Ambar, modifier = Modifier.size(20.dp))
+                                    Text(
+                                        "  Lista de compras (${bajoMinimo.size})",
+                                        fontWeight = FontWeight.Bold,
+                                        color = Ambar
+                                    )
+                                }
                                 Text(
-                                    "  Lista de compras (${bajoMinimo.size})",
-                                    fontWeight = FontWeight.Bold,
-                                    color = Ambar
+                                    bajoMinimo.joinToString(", ") { it.nombre },
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = MaterialTheme.colorScheme.onSurface,
+                                    modifier = Modifier.padding(top = 6.dp)
                                 )
                             }
-                            Text(
-                                bajoMinimo.joinToString(", ") { it.nombre },
-                                style = MaterialTheme.typography.bodyMedium,
-                                color = MaterialTheme.colorScheme.onSurface,
-                                modifier = Modifier.padding(top = 6.dp)
-                            )
                         }
                     }
                 }
-            }
-            item {
-                Text(
-                    "Inventario",
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.SemiBold,
-                    modifier = Modifier.padding(top = 4.dp)
-                )
-            }
-            items(productos, key = { it.id }) { prod ->
-                AlacenaRow(
-                    prod = prod,
-                    item = itemDe(prod),
-                    onMenos = { vm.ajustarStock(prod.id, -1.0) },
-                    onMas = { vm.ajustarStock(prod.id, 1.0) },
-                    onEditar = { editando = prod }
-                )
+                item {
+                    Text(
+                        "Inventario",
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.SemiBold,
+                        modifier = Modifier.padding(top = 4.dp)
+                    )
+                }
+                items(filtrados, key = { it.id }) { prod ->
+                    AlacenaRow(
+                        prod = prod,
+                        item = itemDe(prod),
+                        onMenos = { vm.ajustarStock(prod.id, -1.0) },
+                        onMas = { vm.ajustarStock(prod.id, 1.0) },
+                        onEditar = { editando = prod }
+                    )
+                }
             }
         }
     }

@@ -205,7 +205,7 @@ fun AppRoot(vm: AppViewModel = viewModel()) {
         OcrResultDialog(
             resultado = res,
             onDismiss = { ocrResultado = null },
-            onConfirmar = { vm.agregarDesdeOcr(res); ocrResultado = null }
+            onConfirmar = { sumar -> vm.agregarDesdeOcr(res, sumar); ocrResultado = null }
         )
     }
     ocrError?.let { msg ->

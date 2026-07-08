@@ -15,6 +15,8 @@ import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.DocumentScanner
 import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.Search
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -50,6 +52,7 @@ fun ProductosScreen(
     val productos by vm.productos.collectAsState()
     var mostrarNuevo by remember { mutableStateOf(false) }
     var editando by remember { mutableStateOf<Producto?>(null) }
+    var busqueda by remember { mutableStateOf("") }
 
     Scaffold(
         topBar = {
@@ -76,25 +79,37 @@ fun ProductosScreen(
             ) { Icon(Icons.Filled.Add, contentDescription = "Agregar producto") }
         }
     ) { padding ->
-        if (productos.isEmpty()) {
-            Box(Modifier.padding(padding).fillMaxSize().padding(24.dp), Alignment.Center) {
-                Text(
-                    "Toca + para agregar tu primer producto.",
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            }
-        } else {
-            LazyColumn(
-                modifier = Modifier.padding(padding).fillMaxSize().padding(horizontal = 16.dp, vertical = 8.dp),
-                verticalArrangement = Arrangement.spacedBy(10.dp)
-            ) {
-                items(productos, key = { it.id }) { prod ->
-                    ProductoRow(
-                        prod = prod,
-                        onAbrir = { onAbrirProducto(prod.id) },
-                        onEditar = { editando = prod },
-                        onEliminar = { vm.eliminarProducto(prod) }
+        Column(Modifier.padding(padding).fillMaxSize()) {
+            OutlinedTextField(
+                value = busqueda,
+                onValueChange = { busqueda = it },
+                label = { Text("Buscar producto") },
+                singleLine = true,
+                leadingIcon = { Icon(Icons.Filled.Search, contentDescription = null) },
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp)
+            )
+            val filtrados = productos.filter { it.nombre.contains(busqueda, ignoreCase = true) }
+            if (filtrados.isEmpty()) {
+                Box(Modifier.fillMaxSize().padding(24.dp), Alignment.Center) {
+                    Text(
+                        if (productos.isEmpty()) "Toca + para agregar tu primer producto."
+                        else "Sin resultados para \"$busqueda\".",
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
+                }
+            } else {
+                LazyColumn(
+                    modifier = Modifier.fillMaxSize().padding(horizontal = 16.dp),
+                    verticalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    items(filtrados, key = { it.id }) { prod ->
+                        ProductoRow(
+                            prod = prod,
+                            onAbrir = { onAbrirProducto(prod.id) },
+                            onEditar = { editando = prod },
+                            onEliminar = { vm.eliminarProducto(prod) }
+                        )
+                    }
                 }
             }
         }
