@@ -4,7 +4,7 @@ const path = require('path');
 const crypto = require('crypto');
 
 let cfgPath = null;
-let cache = { pinHash: null, openAiKey: '' };
+let cache = { pinHash: null, openAiKey: '', moneda: 'COP' };
 
 function init(userDataPath) {
   cfgPath = path.join(userDataPath, 'config.json');
@@ -30,5 +30,7 @@ module.exports = {
   setPin: (pin) => { cache.pinHash = sha256(pin); guardar(); },
   clearPin: () => { cache.pinHash = null; guardar(); },
   getOpenAiKey: () => cache.openAiKey || '',
-  setOpenAiKey: (key) => { cache.openAiKey = (key || '').trim(); guardar(); }
+  setOpenAiKey: (key) => { cache.openAiKey = (key || '').trim(); guardar(); },
+  getMoneda: () => cache.moneda || 'COP',
+  setMoneda: (code) => { cache.moneda = code || 'COP'; guardar(); }
 };

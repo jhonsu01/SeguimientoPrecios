@@ -45,6 +45,8 @@ if (!window.api) {
     pinVerify: async () => true,
     pinSet: async () => {}, pinClear: async () => {},
     keyGet: async () => '', keySet: async () => {},
+    monedaGet: async () => 'COP', monedaSet: async () => {},
+    openExternal: async (url) => { window.open(url, '_blank'); },
     ocrScan: async () => ({ cancelado: false, resultado: { tienda: 'Demo Market', productos: [{ nombre: 'Pan tajado', precio: 5200, cantidad: 1, unidad: 'unidad' }, { nombre: 'Huevos AA x12', precio: 12500, cantidad: 1, unidad: 'unidad' }] } }),
     ocrAdd: async (res) => { (res.productos || []).forEach(it => { const id = uid(); mem.productos.push({ id, nombre: it.nombre, categoria: 'General', unidadMedida: it.unidad || 'unidad' }); mem.precios.push({ id: uid(), productoId: id, precio: it.precio, cantidad: it.cantidad || 1, tipoPrecio: 'unitario', tienda: res.tienda || '', fecha: Date.now() }); }); },
     backupExport: async () => ({ ok: true, ruta: 'demo-backup.zip' }),
@@ -57,8 +59,33 @@ function esc(s) {
   return String(s ?? '').replace(/[&<>"']/g, c =>
     ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 }
+const MONEDAS = [
+  { code: 'COP', nombre: 'Peso colombiano', symbol: '$', decimals: 0, miles: '.', decimal: ',' },
+  { code: 'USD', nombre: 'Dolar', symbol: '$', decimals: 2, miles: ',', decimal: '.' },
+  { code: 'EUR', nombre: 'Euro', symbol: '€', decimals: 2, miles: '.', decimal: ',' },
+  { code: 'MXN', nombre: 'Peso mexicano', symbol: '$', decimals: 2, miles: ',', decimal: '.' },
+  { code: 'ARS', nombre: 'Peso argentino', symbol: '$', decimals: 2, miles: '.', decimal: ',' },
+  { code: 'CLP', nombre: 'Peso chileno', symbol: '$', decimals: 0, miles: '.', decimal: ',' },
+  { code: 'PEN', nombre: 'Sol peruano', symbol: 'S/', decimals: 2, miles: ',', decimal: '.' },
+  { code: 'BRL', nombre: 'Real brasileno', symbol: 'R$', decimals: 2, miles: '.', decimal: ',' },
+  { code: 'GBP', nombre: 'Libra', symbol: '£', decimals: 2, miles: ',', decimal: '.' },
+  { code: 'JPY', nombre: 'Yen', symbol: '¥', decimals: 0, miles: ',', decimal: '.' }
+];
+let CURRENCY = MONEDAS[0];
+function setCurrency(code) { CURRENCY = MONEDAS.find(m => m.code === code) || MONEDAS[0]; }
+
 function moneda(v) {
-  return '$' + Number(v).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  const d = CURRENCY;
+  const neg = v < 0;
+  const abs = Math.abs(Number(v) || 0);
+  const factor = Math.pow(10, d.decimals);
+  const round = Math.round(abs * factor) / factor;
+  const entero = Math.floor(round);
+  const frac = Math.round((round - entero) * factor);
+  const enteroStr = String(entero).replace(/\B(?=(\d{3})+(?!\d))/g, d.miles);
+  let s = (neg ? '-' : '') + d.symbol + enteroStr;
+  if (d.decimals > 0) s += d.decimal + String(frac).padStart(d.decimals, '0');
+  return s;
 }
 function fmtNum(v) { return Number.isInteger(v) ? String(v) : String(v); }
 function fecha(ms) { return new Date(ms).toLocaleDateString(); }
@@ -128,6 +155,7 @@ async function cargar() {
 }
 
 async function initApp() {
+  try { setCurrency(await window.api.monedaGet()); } catch (e) { /* usa COP por defecto */ }
   const tienePin = await window.api.pinHas();
   if (tienePin) mostrarLock();
   else await cargar();
@@ -355,6 +383,11 @@ function viewAjustes() {
       </div>
     </div>
     <div class="card setting-block">
+      <h3>Moneda</h3>
+      <div class="setting-desc">Selecciona la moneda para mostrar los precios (por defecto COP).</div>
+      <select id="aj-moneda" style="max-width:320px">${MONEDAS.map(m => `<option value="${m.code}" ${m.code === CURRENCY.code ? 'selected' : ''}>${m.code} - ${m.nombre}</option>`).join('')}</select>
+    </div>
+    <div class="card setting-block">
       <h3>Seguridad (PIN)</h3>
       <div class="setting-desc" id="aj-pin-desc">Protege el acceso con un PIN (hash SHA-256).</div>
       <div id="aj-pin-actions"></div>
@@ -369,6 +402,10 @@ function viewAjustes() {
     <div class="card setting-block">
       <h3>Acerca de</h3>
       <div class="setting-desc">Seguimiento de Precios &middot; modo oscuro &middot; offline-first</div>
+      <div style="margin-top:12px;display:flex;gap:10px;flex-wrap:wrap">
+        <button class="btn kofi" id="aj-kofi">&#9749; Apoyame en Ko-fi</button>
+        <button class="btn btn-ghost" id="aj-repo">Repositorio en GitHub</button>
+      </div>
     </div>
   `;
 }
@@ -443,6 +480,17 @@ async function attachAjustes() {
     const r = await window.api.backupImport();
     if (r.ok) { await cargar(); go('ajustes'); const msg = $('#aj-backup-msg'); if (msg) { msg.textContent = 'Datos importados'; msg.style.display = 'block'; } }
   });
+
+  const selMoneda = $('#aj-moneda');
+  if (selMoneda) selMoneda.addEventListener('change', async () => {
+    await window.api.monedaSet(selMoneda.value);
+    setCurrency(selMoneda.value);
+    go('ajustes');
+  });
+  const kofi = $('#aj-kofi');
+  if (kofi) kofi.addEventListener('click', () => window.api.openExternal('https://ko-fi.com/V7V81LV7GX'));
+  const repo = $('#aj-repo');
+  if (repo) repo.addEventListener('click', () => window.api.openExternal('https://github.com/jhonsu01/SeguimientoPrecios'));
 }
 
 async function ajustarStock(id, delta) {
@@ -557,6 +605,37 @@ function modalMensaje(titulo, msg) {
   $('#m-ok').addEventListener('click', closeModal);
 }
 
+let scanReader = null;
+function openCameraScan(onResult) {
+  if (typeof ZXing === 'undefined') {
+    modalMensaje('Escaner', 'La libreria de escaneo no esta disponible.');
+    return;
+  }
+  const ov = $('#scan-overlay');
+  const box = $('#scan-modal');
+  box.innerHTML = `
+    <h3>Escanear codigo de barras</h3>
+    <video id="scan-video" muted autoplay playsinline></video>
+    <div class="setting-desc" id="scan-msg" style="margin-top:8px">Apunta la camara al codigo de barras...</div>
+    <div class="modal-actions"><button class="btn btn-ghost" id="scan-cancel">Cerrar</button></div>`;
+  ov.classList.remove('hidden');
+  const cerrar = () => {
+    if (scanReader) { try { scanReader.reset(); } catch (e) {} scanReader = null; }
+    ov.classList.add('hidden');
+    box.innerHTML = '';
+  };
+  $('#scan-cancel').addEventListener('click', cerrar);
+  try {
+    scanReader = new ZXing.BrowserMultiFormatReader();
+    scanReader.decodeFromVideoDevice(null, 'scan-video', (result) => {
+      if (result) { const t = result.getText(); cerrar(); onResult(t); }
+    });
+  } catch (e) {
+    const m = $('#scan-msg');
+    if (m) m.textContent = 'No se pudo iniciar la camara: ' + (e.message || e);
+  }
+}
+
 function modalProducto(prod) {
   const p = prod || {};
   openModal(`
@@ -571,13 +650,17 @@ function modalProducto(prod) {
     <label>Unidad de medida</label>
     <select id="m-unidad">${UNIDADES.map(u => `<option ${u === (p.unidadMedida || 'unidad') ? 'selected' : ''}>${u}</option>`).join('')}</select>
     <label>Codigo de barras (opcional)</label>
-    <input id="m-codigo" value="${esc(p.codigoBarras || '')}" />
+    <div style="display:flex;gap:8px">
+      <input id="m-codigo" value="${esc(p.codigoBarras || '')}" style="flex:1" />
+      <button type="button" class="btn btn-ghost" id="m-scan">&#128247; Escanear</button>
+    </div>
     <div class="modal-actions">
       <button class="btn btn-ghost" id="m-cancel">Cancelar</button>
       <button class="btn btn-primary" id="m-save">Guardar</button>
     </div>
   `);
   $('#m-cancel').addEventListener('click', closeModal);
+  $('#m-scan').addEventListener('click', () => openCameraScan((v) => { const el = $('#m-codigo'); if (el) el.value = v; }));
   $('#m-save').addEventListener('click', async () => {
     const nombre = $('#m-nombre').value.trim();
     if (!nombre) { $('#e-nombre').classList.add('show'); return; }

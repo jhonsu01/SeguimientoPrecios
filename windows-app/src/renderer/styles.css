@@ -214,6 +214,14 @@ label { font-size: 12px; color: var(--sub); display: block; margin: 12px 0 4px; 
 .setting-desc { color: var(--sub); font-size: 13px; margin-bottom: 10px; }
 .saved-ok { color: var(--emerald); font-size: 13px; margin-top: 8px; }
 
+/* ---- Ko-fi ---- */
+.btn.kofi { background: #29ABE0; color: #fff; }
+.btn.kofi:hover { filter: brightness(1.08); }
+
+/* ---- Escaner de codigo de barras ---- */
+#scan-overlay { z-index: 60; }
+#scan-video { width: 100%; max-height: 340px; border-radius: 10px; background: #000; }
+
 /* ---- Lock (PIN) ---- */
 .lock {
   position: fixed; inset: 0;

@@ -31,25 +31,25 @@ Los binarios se publican automaticamente en la [**ultima release**](https://gith
 
 ---
 
-## Funcionalidades (v0.2.0)
+## Funcionalidades (v0.3.0)
 
 - **CRUD de productos** con categoria, tipo/marca, unidad de medida y codigo de barras.
-- **Registro historico de precios** por producto, tienda y tipo (unitario/promocion).
-- **Graficos de evolucion** del precio en el tiempo (dibujados a medida, sin dependencias pesadas).
-- **Indicadores de tendencia** (sube / baja / estable) y estadisticas min/promedio/maximo.
-- **Comparacion entre tiendas**: ranking de la tienda mas economica por producto.
-- **IA predictiva de precios**: proyeccion a ~7 dias por regresion lineal.
-- **OCR de facturas con OpenAI**: extrae productos y precios de una foto (API key del usuario).
+- **Moneda configurable** (COP, USD, EUR, MXN, ARS, CLP, PEN, BRL, GBP, JPY) con formato por pais.
+- **Escaneo de codigo de barras** con la camara (ML Kit en Android, webcam/ZXing en Windows).
+- **OCR de facturas con OpenAI**: acepta **imagen, PDF y ZIP** (extrae el PDF del ZIP); interpreta
+  bien el separador de miles (ej. `9.120` = 9120).
+- **Importar / Exportar multiplataforma**: respaldo en ZIP (JSON portable) que funciona entre
+  Android y Windows; el archivo incluye fecha y hora en el nombre.
+- **Registro historico de precios**, **graficos de evolucion**, **tendencias** y estadisticas.
+- **Comparacion entre tiendas** e **IA predictiva** (regresion lineal, ~7 dias).
 - **Mi Alacena**: inventario domestico con alertas y lista de compras automatica.
 - **PIN de acceso** con hash SHA-256.
-- **Importar / Exportar** toda la base de datos en ZIP (SQLite + JSON).
 - **Base de datos local SQLite** (offline-first): Room en Android, sql.js en Windows.
-- **UI moderna en modo oscuro** con identidad de marca compartida.
-- **Iconos adaptativos** multi-densidad (Android) y `.ico` multi-tamano (Windows).
+- **UI moderna en modo oscuro** e **iconos adaptativos** multi-densidad / `.ico` multi-tamano.
 
 ### Roadmap (proximas versiones)
 
-Escaneo de codigo de barras · sincronizacion opcional en la nube · notificaciones de ofertas.
+Sincronizacion opcional en la nube · notificaciones de ofertas · precios comunitarios.
 
 ### OCR: como obtener tu API key de OpenAI
 

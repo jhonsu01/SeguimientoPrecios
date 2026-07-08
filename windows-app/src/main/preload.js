@@ -27,6 +27,13 @@ contextBridge.exposeInMainWorld('api', {
   ocrScan: () => ipcRenderer.invoke('ocr:scan'),
   ocrAdd: (res) => ipcRenderer.invoke('ocr:add', res),
 
+  // Moneda
+  monedaGet: () => ipcRenderer.invoke('moneda:get'),
+  monedaSet: (code) => ipcRenderer.invoke('moneda:set', code),
+
+  // Enlaces externos
+  openExternal: (url) => ipcRenderer.invoke('open:external', url),
+
   // Backup
   backupExport: () => ipcRenderer.invoke('backup:export'),
   backupImport: () => ipcRenderer.invoke('backup:import')

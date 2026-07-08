@@ -177,9 +177,38 @@ function agregarDesdeOcr(res) {
   });
 }
 
+// ---- Restaurar desde un respaldo JSON (import multiplataforma) ----
+function restoreFromJson(data) {
+  db.run('DELETE FROM precios');
+  db.run('DELETE FROM alacena');
+  db.run('DELETE FROM productos');
+  db.run('DELETE FROM tiendas');
+  (data.productos || []).forEach((p) => {
+    db.run(
+      'INSERT OR REPLACE INTO productos (id,nombre,categoria,tipo,codigoBarras,unidadMedida,creadoEn) VALUES (?,?,?,?,?,?,?)',
+      [p.id, p.nombre, p.categoria || 'General', p.tipo || '', p.codigoBarras || null, p.unidadMedida || 'unidad', p.creadoEn || Date.now()]
+    );
+  });
+  (data.tiendas || []).forEach((t) => {
+    db.run('INSERT OR REPLACE INTO tiendas (id,nombre,ubicacion) VALUES (?,?,?)',
+      [t.id, t.nombre, t.ubicacion || null]);
+  });
+  (data.precios || []).forEach((p) => {
+    db.run(
+      'INSERT OR REPLACE INTO precios (id,productoId,precio,cantidad,tipoPrecio,tienda,fecha) VALUES (?,?,?,?,?,?,?)',
+      [p.id, p.productoId, p.precio, p.cantidad || 1, p.tipoPrecio || 'unitario', p.tienda || '', p.fecha || Date.now()]
+    );
+  });
+  (data.alacena || []).forEach((a) => {
+    db.run('INSERT OR REPLACE INTO alacena (productoId,cantidadActual,cantidadMinima) VALUES (?,?,?)',
+      [a.productoId, a.cantidadActual || 0, a.cantidadMinima != null ? a.cantidadMinima : 1]);
+  });
+  persistir();
+}
+
 module.exports = {
   init, recargar, getDbPath,
   productosList, productoSave, productoDelete,
   preciosAll, precioSave, precioDelete, tiendasList,
-  alacenaList, alacenaSave, agregarDesdeOcr
+  alacenaList, alacenaSave, agregarDesdeOcr, restoreFromJson
 };
