@@ -19,5 +19,9 @@ class Prefs(context: Context) {
         get() = sp.getString("openai_key", "") ?: ""
         set(value) { sp.edit().putString("openai_key", value).apply() }
 
+    var moneda: String
+        get() = sp.getString("moneda", "COP") ?: "COP"
+        set(value) { sp.edit().putString("moneda", value).apply() }
+
     val tienePin: Boolean get() = !pinHash.isNullOrBlank()
 }

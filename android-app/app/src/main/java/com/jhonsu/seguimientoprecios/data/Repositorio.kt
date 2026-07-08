@@ -26,4 +26,21 @@ class Repositorio(private val db: AppDatabase) {
     suspend fun guardarTienda(tienda: Tienda) = db.tiendaDao().upsert(tienda)
 
     suspend fun guardarAlacena(item: Alacena) = db.alacenaDao().upsert(item)
+
+    /** Reemplaza TODOS los datos (usado al importar un respaldo JSON, multiplataforma). */
+    suspend fun reemplazarTodo(
+        productos: List<Producto>,
+        precios: List<Precio>,
+        tiendas: List<Tienda>,
+        alacena: List<Alacena>
+    ) {
+        db.precioDao().borrarTodos()
+        db.alacenaDao().borrarTodos()
+        db.productoDao().borrarTodos()
+        db.tiendaDao().borrarTodas()
+        db.productoDao().insertarTodos(productos)
+        db.tiendaDao().insertarTodas(tiendas)
+        db.precioDao().insertarTodos(precios)
+        db.alacenaDao().insertarTodos(alacena)
+    }
 }

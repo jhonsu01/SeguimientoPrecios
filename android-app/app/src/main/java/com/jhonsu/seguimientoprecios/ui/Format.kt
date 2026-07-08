@@ -19,8 +19,8 @@ fun compararPorTienda(precios: List<Precio>): List<TiendaPrecio> =
         }
         .sortedBy { it.precio }
 
-/** Formatea un valor como moneda simple: "$1,234.56". */
-fun moneda(valor: Double): String = "$" + String.format(Locale.US, "%,.2f", valor)
+/** Formatea un valor segun la moneda configurada (COP, USD, EUR, ...). */
+fun moneda(valor: Double): String = com.jhonsu.seguimientoprecios.util.Moneda.format(valor)
 
 private val fmtFecha = SimpleDateFormat("dd/MM/yyyy", Locale.getDefault())
 private val fmtFechaHora = SimpleDateFormat("dd/MM/yyyy HH:mm", Locale.getDefault())

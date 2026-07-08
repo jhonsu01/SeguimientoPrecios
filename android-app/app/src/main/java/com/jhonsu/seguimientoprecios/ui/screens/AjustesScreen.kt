@@ -24,14 +24,20 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import android.app.Activity
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import com.jhonsu.seguimientoprecios.AppViewModel
+import com.jhonsu.seguimientoprecios.ui.components.DropdownCampo
 import com.jhonsu.seguimientoprecios.ui.components.PinDialog
 import com.jhonsu.seguimientoprecios.ui.theme.Emerald
+import com.jhonsu.seguimientoprecios.util.Moneda
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -40,8 +46,10 @@ fun AjustesScreen(vm: AppViewModel, onExportar: () -> Unit, onImportar: () -> Un
     var keyGuardada by remember { mutableStateOf(false) }
     var tienePin by remember { mutableStateOf(vm.tienePin) }
     var mostrarPin by remember { mutableStateOf(false) }
+    var monedaCode by remember { mutableStateOf(vm.getMoneda()) }
 
     val ctx = LocalContext.current
+    val uriHandler = LocalUriHandler.current
     val version = remember {
         try {
             ctx.packageManager.getPackageInfo(ctx.packageName, 0).versionName ?: ""
@@ -87,6 +95,26 @@ fun AjustesScreen(vm: AppViewModel, onExportar: () -> Unit, onImportar: () -> Un
                 if (keyGuardada) {
                     Text("Guardada ✓", color = Emerald, style = MaterialTheme.typography.labelMedium)
                 }
+            }
+
+            Seccion("Moneda") {
+                Text(
+                    "Selecciona la moneda para mostrar los precios (por defecto COP).",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                DropdownCampo(
+                    etiqueta = "Moneda",
+                    opciones = Moneda.LISTA.map { it.etiqueta },
+                    seleccion = Moneda.porCodigo(monedaCode).etiqueta,
+                    onSelect = { etiqueta ->
+                        val def = Moneda.LISTA.first { it.etiqueta == etiqueta }
+                        monedaCode = def.code
+                        vm.setMoneda(def.code)
+                        (ctx as? Activity)?.recreate()
+                    },
+                    modifier = Modifier.fillMaxWidth().padding(top = 8.dp)
+                )
             }
 
             Seccion("Seguridad (PIN)") {
@@ -141,6 +169,18 @@ fun AjustesScreen(vm: AppViewModel, onExportar: () -> Unit, onImportar: () -> Un
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(10.dp),
+                    modifier = Modifier.padding(top = 12.dp)
+                ) {
+                    Button(
+                        onClick = { uriHandler.openUri("https://ko-fi.com/V7V81LV7GX") },
+                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF29ABE0))
+                    ) { Text("☕ Apoyame en Ko-fi", color = Color.White) }
+                    OutlinedButton(
+                        onClick = { uriHandler.openUri("https://github.com/jhonsu01/SeguimientoPrecios") }
+                    ) { Text("Repositorio") }
+                }
             }
         }
     }

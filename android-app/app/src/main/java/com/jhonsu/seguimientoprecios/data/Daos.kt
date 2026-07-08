@@ -18,8 +18,14 @@ interface ProductoDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun upsert(producto: Producto)
 
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertarTodos(items: List<Producto>)
+
     @Delete
     suspend fun eliminar(producto: Producto)
+
+    @Query("DELETE FROM productos")
+    suspend fun borrarTodos()
 }
 
 @Dao
@@ -33,8 +39,14 @@ interface PrecioDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun upsert(precio: Precio)
 
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertarTodos(items: List<Precio>)
+
     @Delete
     suspend fun eliminar(precio: Precio)
+
+    @Query("DELETE FROM precios")
+    suspend fun borrarTodos()
 }
 
 @Dao
@@ -45,8 +57,14 @@ interface AlacenaDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun upsert(item: Alacena)
 
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertarTodos(items: List<Alacena>)
+
     @Query("DELETE FROM alacena WHERE productoId = :productoId")
     suspend fun eliminarPorProducto(productoId: String)
+
+    @Query("DELETE FROM alacena")
+    suspend fun borrarTodos()
 }
 
 @Dao
@@ -57,6 +75,12 @@ interface TiendaDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun upsert(tienda: Tienda)
 
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertarTodas(items: List<Tienda>)
+
     @Delete
     suspend fun eliminar(tienda: Tienda)
+
+    @Query("DELETE FROM tiendas")
+    suspend fun borrarTodas()
 }

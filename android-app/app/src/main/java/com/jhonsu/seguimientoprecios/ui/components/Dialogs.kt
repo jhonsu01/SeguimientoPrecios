@@ -6,15 +6,21 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.QrCodeScanner
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExposedDropdownMenuBox
 import androidx.compose.material3.ExposedDropdownMenuDefaults
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MenuAnchorType
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.ui.platform.LocalContext
+import com.google.mlkit.vision.codescanner.GmsBarcodeScanning
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -82,6 +88,7 @@ fun ProductoDialog(
     var unidad by remember { mutableStateOf(inicial?.unidadMedida ?: "unidad") }
     var codigo by remember { mutableStateOf(inicial?.codigoBarras ?: "") }
     var error by remember { mutableStateOf(false) }
+    val ctx = LocalContext.current
 
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -113,6 +120,16 @@ fun ProductoDialog(
                     onValueChange = { codigo = it },
                     label = { Text("Codigo de barras (opcional)") },
                     singleLine = true,
+                    trailingIcon = {
+                        IconButton(onClick = {
+                            GmsBarcodeScanning.getClient(ctx).startScan()
+                                .addOnSuccessListener { b -> b.rawValue?.let { codigo = it } }
+                                .addOnFailureListener { }
+                                .addOnCanceledListener { }
+                        }) {
+                            Icon(Icons.Filled.QrCodeScanner, contentDescription = "Escanear codigo de barras")
+                        }
+                    },
                     modifier = Modifier.fillMaxWidth()
                 )
             }

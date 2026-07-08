@@ -5,13 +5,16 @@ import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.net.Uri
 import android.util.Base64
+import com.jhonsu.seguimientoprecios.util.Moneda
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import org.json.JSONArray
 import org.json.JSONObject
+import java.io.ByteArrayInputStream
 import java.io.ByteArrayOutputStream
 import java.net.HttpURLConnection
 import java.net.URL
+import java.util.zip.ZipInputStream
 
 data class ItemOcr(
     val nombre: String,
@@ -25,62 +28,107 @@ data class OcrResultado(
     val items: List<ItemOcr>
 )
 
-/** OCR de facturas via OpenAI (vision). La API key la provee el usuario (Ajustes). */
+/** OCR de facturas via OpenAI (vision + PDF). Acepta imagen, PDF o ZIP (con PDF/imagen dentro). */
 object OpenAiOcr {
 
     private const val ENDPOINT = "https://api.openai.com/v1/chat/completions"
     private const val MODELO = "gpt-4o-mini"
 
-    private const val PROMPT = """Eres un extractor de facturas. Analiza la imagen de la factura/recibo y devuelve
-SOLO un objeto JSON con esta forma exacta:
-{"tienda": "nombre del establecimiento o vacio", "productos": [{"nombre": "nombre limpio del producto", "precio": 0.0, "cantidad": 1, "unidad": "unidad|kg|g|L|ml|lb"}]}
-Normaliza los nombres (sin codigos ni abreviaturas raras). El precio es el precio unitario numerico sin simbolos. Si no hay datos, usa listas/valores vacios."""
+    private fun prompt(): String = """Eres un extractor de facturas/recibos. Devuelve SOLO un objeto JSON con esta forma:
+{"tienda": "nombre del establecimiento o vacio", "productos": [{"nombre": "nombre limpio", "precio": 0, "cantidad": 1, "unidad": "unidad|kg|g|L|ml|lb"}]}
 
-    fun uriABase64(context: Context, uri: Uri, maxDim: Int = 1024): String {
-        val bmp: Bitmap = context.contentResolver.openInputStream(uri).use { input ->
-            BitmapFactory.decodeStream(input)
-        } ?: throw IllegalArgumentException("No se pudo leer la imagen.")
-        val escalada = escalar(bmp, maxDim)
+REGLAS DE NUMEROS (MUY IMPORTANTE):
+- La moneda es ${Moneda.actual.code}. Muchos paises (Colombia, etc.) usan el PUNTO como separador de MILES y la COMA como separador decimal.
+- Interpreta los montos en ese contexto. Ejemplos: "9.120" = 9120 ; "22.950" = 22950 ; "1.234.567" = 1234567 ; "1.234,50" = 1234.50.
+- Devuelve "precio" como numero real SIN separadores de miles (ej: 9120, NUNCA 9.12).
+- Usa el precio UNITARIO (columna VR. UNIT o similar) cuando exista.
+Normaliza los nombres (sin codigos). Si no hay datos, usa listas/valores vacios."""
+
+    /** Lee la Uri (imagen/PDF/ZIP) y devuelve (bytes, mime) listos para enviar. */
+    fun prepararDesdeUri(context: Context, uri: Uri): Pair<ByteArray, String> {
+        val mimeOrig = context.contentResolver.getType(uri) ?: adivinarMime(uri.toString())
+        val bytes = context.contentResolver.openInputStream(uri)?.use { it.readBytes() }
+            ?: throw IllegalArgumentException("No se pudo leer el archivo.")
+        val ruta = uri.toString().lowercase()
+        return when {
+            mimeOrig.contains("zip") || ruta.endsWith(".zip") -> extraerDeZip(bytes)
+            mimeOrig == "application/pdf" || ruta.endsWith(".pdf") -> bytes to "application/pdf"
+            else -> escalarImagen(bytes) to "image/jpeg"
+        }
+    }
+
+    private fun adivinarMime(nombre: String): String {
+        val n = nombre.lowercase()
+        return when {
+            n.endsWith(".pdf") -> "application/pdf"
+            n.endsWith(".zip") -> "application/zip"
+            n.endsWith(".png") -> "image/png"
+            n.endsWith(".webp") -> "image/webp"
+            else -> "image/jpeg"
+        }
+    }
+
+    private fun extraerDeZip(bytes: ByteArray): Pair<ByteArray, String> {
+        ZipInputStream(ByteArrayInputStream(bytes)).use { zip ->
+            var e = zip.nextEntry
+            while (e != null) {
+                val n = e.name.lowercase()
+                val esValido = n.endsWith(".pdf") || n.endsWith(".jpg") || n.endsWith(".jpeg") ||
+                    n.endsWith(".png") || n.endsWith(".webp")
+                if (!e.isDirectory && esValido) {
+                    val contenido = zip.readBytes()
+                    val mime = if (n.endsWith(".pdf")) "application/pdf" else "image/jpeg"
+                    return if (mime == "application/pdf") contenido to mime
+                    else escalarImagen(contenido) to "image/jpeg"
+                }
+                e = zip.nextEntry
+            }
+        }
+        throw IllegalArgumentException("El ZIP no contiene un PDF ni una imagen de factura.")
+    }
+
+    private fun escalarImagen(bytes: ByteArray, maxDim: Int = 1400): ByteArray {
+        val bmp = BitmapFactory.decodeByteArray(bytes, 0, bytes.size)
+            ?: throw IllegalArgumentException("Formato de imagen no soportado.")
+        val mayor = maxOf(bmp.width, bmp.height)
+        val escalada = if (mayor <= maxDim) bmp else {
+            val f = maxDim.toFloat() / mayor
+            Bitmap.createScaledBitmap(bmp, (bmp.width * f).toInt(), (bmp.height * f).toInt(), true)
+        }
         val baos = ByteArrayOutputStream()
-        escalada.compress(Bitmap.CompressFormat.JPEG, 80, baos)
-        return Base64.encodeToString(baos.toByteArray(), Base64.NO_WRAP)
+        escalada.compress(Bitmap.CompressFormat.JPEG, 82, baos)
+        return baos.toByteArray()
     }
 
-    private fun escalar(bmp: Bitmap, maxDim: Int): Bitmap {
-        val w = bmp.width
-        val h = bmp.height
-        val mayor = maxOf(w, h)
-        if (mayor <= maxDim) return bmp
-        val factor = maxDim.toFloat() / mayor
-        return Bitmap.createScaledBitmap(bmp, (w * factor).toInt(), (h * factor).toInt(), true)
-    }
-
-    suspend fun extraer(apiKey: String, imagenBase64: String): OcrResultado =
+    suspend fun extraer(apiKey: String, bytes: ByteArray, mime: String): OcrResultado =
         withContext(Dispatchers.IO) {
-            val contenido = JSONArray()
-                .put(JSONObject().put("type", "text").put("text", PROMPT))
-                .put(
-                    JSONObject().put("type", "image_url").put(
-                        "image_url",
-                        JSONObject().put("url", "data:image/jpeg;base64,$imagenBase64")
-                    )
+            val b64 = Base64.encodeToString(bytes, Base64.NO_WRAP)
+            val parteArchivo = if (mime == "application/pdf") {
+                JSONObject().put("type", "file").put(
+                    "file",
+                    JSONObject().put("filename", "factura.pdf")
+                        .put("file_data", "data:application/pdf;base64,$b64")
                 )
+            } else {
+                JSONObject().put("type", "image_url").put(
+                    "image_url", JSONObject().put("url", "data:$mime;base64,$b64")
+                )
+            }
+            val contenido = JSONArray()
+                .put(JSONObject().put("type", "text").put("text", prompt()))
+                .put(parteArchivo)
+
             val body = JSONObject()
                 .put("model", MODELO)
                 .put("response_format", JSONObject().put("type", "json_object"))
-                .put("max_tokens", 1500)
-                .put(
-                    "messages",
-                    JSONArray().put(
-                        JSONObject().put("role", "user").put("content", contenido)
-                    )
-                )
+                .put("max_tokens", 2000)
+                .put("messages", JSONArray().put(JSONObject().put("role", "user").put("content", contenido)))
 
             val conn = (URL(ENDPOINT).openConnection() as HttpURLConnection).apply {
                 requestMethod = "POST"
                 doOutput = true
                 connectTimeout = 30000
-                readTimeout = 60000
+                readTimeout = 90000
                 setRequestProperty("Content-Type", "application/json")
                 setRequestProperty("Authorization", "Bearer $apiKey")
             }
@@ -89,15 +137,11 @@ Normaliza los nombres (sin codigos ni abreviaturas raras). El precio es el preci
             val code = conn.responseCode
             val stream = if (code in 200..299) conn.inputStream else conn.errorStream
             val respuesta = stream.bufferedReader().use { it.readText() }
-            if (code !in 200..299) {
-                throw RuntimeException("OpenAI ($code): ${respuesta.take(300)}")
-            }
+            if (code !in 200..299) throw RuntimeException("OpenAI ($code): ${respuesta.take(300)}")
 
             val content = JSONObject(respuesta)
-                .getJSONArray("choices")
-                .getJSONObject(0)
-                .getJSONObject("message")
-                .getString("content")
+                .getJSONArray("choices").getJSONObject(0)
+                .getJSONObject("message").getString("content")
             parsear(content)
         }
 

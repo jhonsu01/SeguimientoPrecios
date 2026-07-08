@@ -51,6 +51,9 @@ import com.jhonsu.seguimientoprecios.ui.screens.LockScreen
 import com.jhonsu.seguimientoprecios.ui.screens.ProductosScreen
 import com.jhonsu.seguimientoprecios.ui.theme.SeguimientoPreciosTheme
 import kotlinx.coroutines.launch
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -65,13 +68,24 @@ class MainActivity : ComponentActivity() {
 
 private data class Tab(val ruta: String, val label: String, val icon: ImageVector)
 
+private fun nombreBackup(): String =
+    "SeguimientoPrecios-backup-" + SimpleDateFormat("yyyyMMdd-HHmm", Locale.US).format(Date()) + ".zip"
+
+private val MIMES_OCR = arrayOf(
+    "image/*", "application/pdf", "application/zip",
+    "application/x-zip-compressed", "application/octet-stream"
+)
+
+private val MIMES_ZIP = arrayOf(
+    "application/zip", "application/x-zip-compressed", "application/octet-stream"
+)
+
 @Composable
 fun AppRoot(vm: AppViewModel = viewModel()) {
-    var desbloqueado by remember { mutableStateOf(!vm.tienePin) }
-    if (!desbloqueado) {
+    if (!vm.desbloqueado) {
         LockScreen(
             titulo = "Ingresa tu PIN",
-            onIntento = { pin -> if (vm.verificarPin(pin)) { desbloqueado = true; true } else false }
+            onIntento = { pin -> if (vm.verificarPin(pin)) { vm.desbloqueado = true; true } else false }
         )
         return
     }
@@ -80,13 +94,12 @@ fun AppRoot(vm: AppViewModel = viewModel()) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
 
-    // Estado del flujo OCR (visible sobre cualquier pestana)
     var ocrCargando by remember { mutableStateOf(false) }
     var ocrResultado by remember { mutableStateOf<OcrResultado?>(null) }
     var ocrError by remember { mutableStateOf<String?>(null) }
 
-    val pickImage = rememberLauncherForActivityResult(
-        ActivityResultContracts.GetContent()
+    val pickOcr = rememberLauncherForActivityResult(
+        ActivityResultContracts.OpenDocument()
     ) { uri ->
         if (uri != null) {
             ocrCargando = true
@@ -105,17 +118,13 @@ fun AppRoot(vm: AppViewModel = viewModel()) {
     val exportar = rememberLauncherForActivityResult(
         ActivityResultContracts.CreateDocument("application/zip")
     ) { uri ->
-        if (uri != null) {
-            context.contentResolver.openOutputStream(uri)?.let { vm.exportar(it) }
-        }
+        if (uri != null) context.contentResolver.openOutputStream(uri)?.let { vm.exportar(it) }
     }
 
     val importar = rememberLauncherForActivityResult(
         ActivityResultContracts.OpenDocument()
     ) { uri ->
-        if (uri != null) {
-            context.contentResolver.openInputStream(uri)?.let { vm.importar(it) }
-        }
+        if (uri != null) context.contentResolver.openInputStream(uri)?.let { vm.importar(it) }
     }
 
     val tabs = listOf(
@@ -160,7 +169,7 @@ fun AppRoot(vm: AppViewModel = viewModel()) {
                 ProductosScreen(
                     vm = vm,
                     onAbrirProducto = { id -> nav.navigate("historial/$id") },
-                    onEscanearFactura = { pickImage.launch("image/*") }
+                    onEscanearFactura = { pickOcr.launch(MIMES_OCR) }
                 )
             }
             composable("alacena") {
@@ -170,8 +179,8 @@ fun AppRoot(vm: AppViewModel = viewModel()) {
             composable("ajustes") {
                 AjustesScreen(
                     vm = vm,
-                    onExportar = { exportar.launch("SeguimientoPrecios-backup.zip") },
-                    onImportar = { importar.launch(arrayOf("application/zip", "application/octet-stream", "*/*")) }
+                    onExportar = { exportar.launch(nombreBackup()) },
+                    onImportar = { importar.launch(MIMES_ZIP) }
                 )
             }
             composable(
@@ -187,7 +196,6 @@ fun AppRoot(vm: AppViewModel = viewModel()) {
         }
     }
 
-    // Overlays del flujo OCR
     if (ocrCargando) {
         Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
             CircularProgressIndicator()
@@ -206,6 +214,14 @@ fun AppRoot(vm: AppViewModel = viewModel()) {
             confirmButton = { TextButton(onClick = { ocrError = null }) { Text("Entendido") } },
             title = { Text("OCR de factura") },
             text = { Text(msg) }
+        )
+    }
+    vm.mensaje?.let { m ->
+        AlertDialog(
+            onDismissRequest = { vm.mensaje = null },
+            confirmButton = { TextButton(onClick = { vm.mensaje = null }) { Text("Ok") } },
+            title = { Text("Copia de seguridad") },
+            text = { Text(m) }
         )
     }
 }

@@ -88,5 +88,8 @@ dependencies {
     implementation("androidx.room:room-ktx:2.6.1")
     ksp("androidx.room:room-compiler:2.6.1")
 
+    // Escaner de codigo de barras con la camara (modulo bajo demanda de Google Play)
+    implementation("com.google.android.gms:play-services-code-scanner:16.1.0")
+
     debugImplementation("androidx.compose.ui:ui-tooling")
 }
