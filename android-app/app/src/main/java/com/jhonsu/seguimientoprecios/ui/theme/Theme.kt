@@ -1,6 +1,5 @@
 package com.jhonsu.seguimientoprecios.ui.theme
 
-import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Typography
 import androidx.compose.material3.darkColorScheme
@@ -43,8 +42,6 @@ private val EsquemaOscuro = darkColorScheme(
 @Composable
 fun SeguimientoPreciosTheme(content: @Composable () -> Unit) {
     // App con identidad de marca: siempre modo oscuro (Guia.md).
-    @Suppress("UNUSED_EXPRESSION")
-    isSystemInDarkTheme()
     MaterialTheme(
         colorScheme = EsquemaOscuro,
         typography = Typography(),
