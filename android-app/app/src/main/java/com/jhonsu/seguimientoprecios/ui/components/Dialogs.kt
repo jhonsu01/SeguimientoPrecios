@@ -22,9 +22,13 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
+import com.jhonsu.seguimientoprecios.data.Alacena
 import com.jhonsu.seguimientoprecios.data.Precio
 import com.jhonsu.seguimientoprecios.data.Producto
+import com.jhonsu.seguimientoprecios.net.OcrResultado
+import com.jhonsu.seguimientoprecios.ui.moneda
 
 val UNIDADES = listOf("unidad", "ml", "L", "g", "kg", "lb")
 val TIPOS_PRECIO = listOf("unitario", "promocion")
@@ -189,6 +193,137 @@ fun PrecioDialog(
                         tienda = tienda.trim()
                     )
                 )
+            }) { Text("Guardar") }
+        },
+        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancelar") } }
+    )
+}
+
+@Composable
+fun OcrResultDialog(
+    resultado: OcrResultado,
+    onDismiss: () -> Unit,
+    onConfirmar: () -> Unit
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Factura leida") },
+        text = {
+            Column(
+                verticalArrangement = Arrangement.spacedBy(6.dp),
+                modifier = Modifier.verticalScroll(rememberScrollState())
+            ) {
+                if (resultado.tienda.isNotBlank()) {
+                    Text("Tienda: ${resultado.tienda}")
+                }
+                if (resultado.items.isEmpty()) {
+                    Text("No se detectaron productos en la imagen.")
+                } else {
+                    resultado.items.forEach { item ->
+                        Text("• ${item.nombre} — ${moneda(item.precio)}  (${item.cantidad} ${item.unidad})")
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(
+                onClick = onConfirmar,
+                enabled = resultado.items.isNotEmpty()
+            ) { Text("Agregar ${resultado.items.size}") }
+        },
+        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancelar") } }
+    )
+}
+
+@Composable
+fun AlacenaDialog(
+    producto: Producto,
+    inicial: Alacena,
+    onDismiss: () -> Unit,
+    onGuardar: (Alacena) -> Unit
+) {
+    var actual by remember { mutableStateOf(inicial.cantidadActual.toString()) }
+    var minimo by remember { mutableStateOf(inicial.cantidadMinima.toString()) }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(producto.nombre) },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                OutlinedTextField(
+                    value = actual,
+                    onValueChange = { actual = it },
+                    label = { Text("Cantidad actual") },
+                    singleLine = true,
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                    modifier = Modifier.fillMaxWidth()
+                )
+                OutlinedTextField(
+                    value = minimo,
+                    onValueChange = { minimo = it },
+                    label = { Text("Cantidad minima (alerta)") },
+                    singleLine = true,
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                    modifier = Modifier.fillMaxWidth()
+                )
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = {
+                onGuardar(
+                    inicial.copy(
+                        cantidadActual = actual.replace(",", ".").toDoubleOrNull() ?: 0.0,
+                        cantidadMinima = minimo.replace(",", ".").toDoubleOrNull() ?: 1.0
+                    )
+                )
+            }) { Text("Guardar") }
+        },
+        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancelar") } }
+    )
+}
+
+@Composable
+fun PinDialog(
+    onDismiss: () -> Unit,
+    onDefinir: (String) -> Unit
+) {
+    var pin by remember { mutableStateOf("") }
+    var confirmacion by remember { mutableStateOf("") }
+    var error by remember { mutableStateOf<String?>(null) }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Definir PIN") },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                OutlinedTextField(
+                    value = pin,
+                    onValueChange = { pin = it.filter { c -> c.isDigit() }.take(8); error = null },
+                    label = { Text("PIN (4 a 8 digitos)") },
+                    singleLine = true,
+                    visualTransformation = PasswordVisualTransformation(),
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.NumberPassword),
+                    modifier = Modifier.fillMaxWidth()
+                )
+                OutlinedTextField(
+                    value = confirmacion,
+                    onValueChange = { confirmacion = it.filter { c -> c.isDigit() }.take(8); error = null },
+                    label = { Text("Confirmar PIN") },
+                    singleLine = true,
+                    visualTransformation = PasswordVisualTransformation(),
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.NumberPassword),
+                    modifier = Modifier.fillMaxWidth()
+                )
+                error?.let { Text(it) }
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = {
+                when {
+                    pin.length < 4 -> error = "Usa al menos 4 digitos"
+                    pin != confirmacion -> error = "Los PIN no coinciden"
+                    else -> onDefinir(pin)
+                }
             }) { Text("Guardar") }
         },
         dismissButton = { TextButton(onClick = onDismiss) { Text("Cancelar") } }

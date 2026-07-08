@@ -13,6 +13,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.DocumentScanner
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -41,7 +42,11 @@ import com.jhonsu.seguimientoprecios.ui.components.ProductoDialog
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun ProductosScreen(vm: AppViewModel, onAbrirProducto: (String) -> Unit) {
+fun ProductosScreen(
+    vm: AppViewModel,
+    onAbrirProducto: (String) -> Unit,
+    onEscanearFactura: () -> Unit
+) {
     val productos by vm.productos.collectAsState()
     var mostrarNuevo by remember { mutableStateOf(false) }
     var editando by remember { mutableStateOf<Producto?>(null) }
@@ -50,6 +55,15 @@ fun ProductosScreen(vm: AppViewModel, onAbrirProducto: (String) -> Unit) {
         topBar = {
             TopAppBar(
                 title = { Text("Productos", fontWeight = FontWeight.Bold) },
+                actions = {
+                    IconButton(onClick = onEscanearFactura) {
+                        Icon(
+                            Icons.Filled.DocumentScanner,
+                            contentDescription = "Escanear factura (OCR)",
+                            tint = MaterialTheme.colorScheme.primary
+                        )
+                    }
+                },
                 colors = TopAppBarDefaults.topAppBarColors(
                     containerColor = MaterialTheme.colorScheme.background
                 )

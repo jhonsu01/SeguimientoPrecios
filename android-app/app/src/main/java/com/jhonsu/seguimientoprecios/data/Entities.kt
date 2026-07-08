@@ -48,3 +48,11 @@ data class Precio(
     val tienda: String = "",
     val fecha: Long = System.currentTimeMillis()
 )
+
+/** Inventario domestico "Mi Alacena" (Guia.md - Tabla Alacena). Una fila por producto. */
+@Entity(tableName = "alacena")
+data class Alacena(
+    @PrimaryKey val productoId: String,
+    val cantidadActual: Double = 0.0,
+    val cantidadMinima: Double = 1.0
+)

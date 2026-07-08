@@ -7,6 +7,8 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.DropdownMenuItem
@@ -34,8 +36,12 @@ import com.jhonsu.seguimientoprecios.AppViewModel
 import com.jhonsu.seguimientoprecios.ui.components.PriceChart
 import com.jhonsu.seguimientoprecios.ui.components.StatCard
 import com.jhonsu.seguimientoprecios.ui.components.TendenciaChip
+import com.jhonsu.seguimientoprecios.ui.compararPorTienda
 import com.jhonsu.seguimientoprecios.ui.moneda
 import com.jhonsu.seguimientoprecios.ui.tendenciaDe
+import com.jhonsu.seguimientoprecios.ui.theme.Emerald
+import com.jhonsu.seguimientoprecios.ui.theme.Rojo
+import com.jhonsu.seguimientoprecios.util.Prediccion
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -71,7 +77,11 @@ fun GraficosScreen(vm: AppViewModel) {
         }
 
         Column(
-            modifier = Modifier.padding(padding).fillMaxSize().padding(16.dp),
+            modifier = Modifier
+                .padding(padding)
+                .fillMaxSize()
+                .verticalScroll(rememberScrollState())
+                .padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
             ExposedDropdownMenuBox(expanded = abierto, onExpandedChange = { abierto = it }) {
@@ -119,6 +129,73 @@ fun GraficosScreen(vm: AppViewModel) {
                     StatCard("Minimo", moneda(precios.minOf { it.precio }), Modifier.weight(1f))
                     StatCard("Promedio", moneda(precios.map { it.precio }.average()), Modifier.weight(1f))
                     StatCard("Maximo", moneda(precios.maxOf { it.precio }), Modifier.weight(1f))
+                }
+
+                // IA predictiva
+                val pred = Prediccion.predecir(precios)
+                if (pred.hayDatos) {
+                    val sube = pred.pendientePorDia > 0
+                    Card(
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+                    ) {
+                        Column(Modifier.padding(14.dp)) {
+                            Text(
+                                "Prediccion (IA, ~7 dias)",
+                                style = MaterialTheme.typography.titleSmall,
+                                fontWeight = FontWeight.SemiBold
+                            )
+                            Text(
+                                "≈ ${moneda(pred.prediccion)}",
+                                style = MaterialTheme.typography.headlineSmall,
+                                fontWeight = FontWeight.Bold,
+                                color = if (sube) Rojo else Emerald,
+                                modifier = Modifier.padding(top = 4.dp)
+                            )
+                            Text(
+                                if (sube) "Tendencia al alza segun regresion lineal"
+                                else "Tendencia a la baja segun regresion lineal",
+                                style = MaterialTheme.typography.labelMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                    }
+                }
+
+                // Comparacion entre tiendas
+                val ranking = compararPorTienda(precios)
+                if (ranking.isNotEmpty()) {
+                    Card(
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+                    ) {
+                        Column(Modifier.padding(14.dp)) {
+                            Text(
+                                "Comparacion por tienda",
+                                style = MaterialTheme.typography.titleSmall,
+                                fontWeight = FontWeight.SemiBold,
+                                modifier = Modifier.padding(bottom = 6.dp)
+                            )
+                            ranking.forEachIndexed { i, tp ->
+                                Row(
+                                    modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Text(
+                                        (if (i == 0) "🏆 " else "") + tp.tienda,
+                                        color = if (i == 0) Emerald else MaterialTheme.colorScheme.onSurface,
+                                        fontWeight = if (i == 0) FontWeight.Bold else FontWeight.Normal
+                                    )
+                                    Text(
+                                        moneda(tp.precio),
+                                        fontWeight = FontWeight.SemiBold,
+                                        color = if (i == 0) Emerald else MaterialTheme.colorScheme.onSurface
+                                    )
+                                }
+                            }
+                        }
+                    }
                 }
             } else {
                 Text(

@@ -7,6 +7,18 @@ import java.util.Locale
 
 enum class Tendencia { SUBE, BAJA, ESTABLE, NINGUNA }
 
+data class TiendaPrecio(val tienda: String, val precio: Double, val registros: Int)
+
+/** Comparacion entre tiendas: ultimo precio por tienda, ordenado de mas barato a mas caro. */
+fun compararPorTienda(precios: List<Precio>): List<TiendaPrecio> =
+    precios.filter { it.tienda.isNotBlank() }
+        .groupBy { it.tienda }
+        .map { (tienda, lista) ->
+            val ultimo = lista.maxByOrNull { it.fecha }!!
+            TiendaPrecio(tienda, ultimo.precio, lista.size)
+        }
+        .sortedBy { it.precio }
+
 /** Formatea un valor como moneda simple: "$1,234.56". */
 fun moneda(valor: Double): String = "$" + String.format(Locale.US, "%,.2f", valor)
 

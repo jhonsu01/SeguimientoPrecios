@@ -38,6 +38,18 @@ interface PrecioDao {
 }
 
 @Dao
+interface AlacenaDao {
+    @Query("SELECT * FROM alacena")
+    fun observarTodos(): Flow<List<Alacena>>
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun upsert(item: Alacena)
+
+    @Query("DELETE FROM alacena WHERE productoId = :productoId")
+    suspend fun eliminarPorProducto(productoId: String)
+}
+
+@Dao
 interface TiendaDao {
     @Query("SELECT * FROM tiendas ORDER BY nombre COLLATE NOCASE ASC")
     fun observarTodas(): Flow<List<Tienda>>

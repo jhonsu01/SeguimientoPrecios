@@ -17,17 +17,58 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import com.jhonsu.seguimientoprecios.ui.Tendencia
 import com.jhonsu.seguimientoprecios.ui.theme.Ambar
 import com.jhonsu.seguimientoprecios.ui.theme.Emerald
 import com.jhonsu.seguimientoprecios.ui.theme.Rojo
 import kotlin.math.abs
+
+/**
+ * Texto que se auto-reduce hasta caber en UNA sola linea (sin recortar digitos).
+ * Util para valores monetarios grandes (ej. pesos colombianos) en tarjetas estrechas.
+ */
+@Composable
+fun AutoSizeValor(
+    texto: String,
+    color: Color = MaterialTheme.colorScheme.primary,
+    tamanoInicial: Int = 22,
+    tamanoMinimo: Int = 12,
+    modifier: Modifier = Modifier
+) {
+    var fontSize by remember(texto) { mutableStateOf(tamanoInicial.sp) }
+    var listo by remember(texto) { mutableStateOf(false) }
+    Text(
+        text = texto,
+        maxLines = 1,
+        softWrap = false,
+        overflow = TextOverflow.Visible,
+        fontWeight = FontWeight.Bold,
+        color = color,
+        fontSize = fontSize,
+        lineHeight = fontSize,
+        modifier = modifier.graphicsLayer { alpha = if (listo) 1f else 0f },
+        onTextLayout = { result ->
+            if (result.hasVisualOverflow && fontSize.value > tamanoMinimo) {
+                fontSize = (fontSize.value * 0.92f).sp
+            } else if (!listo) {
+                listo = true
+            }
+        }
+    )
+}
 
 @Composable
 fun StatCard(titulo: String, valor: String, modifier: Modifier = Modifier) {
@@ -35,17 +76,13 @@ fun StatCard(titulo: String, valor: String, modifier: Modifier = Modifier) {
         modifier = modifier,
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
     ) {
-        Column(Modifier.padding(14.dp)) {
-            Text(
-                valor,
-                style = MaterialTheme.typography.headlineSmall,
-                fontWeight = FontWeight.Bold,
-                color = MaterialTheme.colorScheme.primary
-            )
+        Column(Modifier.padding(horizontal = 12.dp, vertical = 14.dp)) {
+            AutoSizeValor(valor, modifier = Modifier.padding(bottom = 2.dp))
             Text(
                 titulo,
                 style = MaterialTheme.typography.labelMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 1
             )
         }
     }
