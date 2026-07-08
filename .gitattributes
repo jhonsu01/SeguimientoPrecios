@@ -1,0 +1,16 @@
+# Normalizacion de fin de linea
+* text=auto
+
+# Scripts Unix: SIEMPRE LF (si no, fallan en runners Linux)
+gradlew text eol=lf
+*.sh text eol=lf
+
+# Scripts Windows: CRLF
+*.bat text eol=crlf
+
+# Binarios (sin conversion)
+*.jar binary
+*.png binary
+*.ico binary
+*.keystore binary
+*.jks binary

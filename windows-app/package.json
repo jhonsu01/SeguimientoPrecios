@@ -1,0 +1,45 @@
+{
+  "name": "seguimiento-precios",
+  "version": "0.1.0",
+  "description": "Seguimiento de Precios - app de escritorio (Windows) para rastrear precios, comparar tiendas y analizar gastos.",
+  "author": "jhonsu01",
+  "license": "MIT",
+  "main": "src/main/main.js",
+  "scripts": {
+    "start": "electron .",
+    "dist:win": "electron-builder --win --publish never"
+  },
+  "dependencies": {
+    "sql.js": "^1.12.0"
+  },
+  "devDependencies": {
+    "electron": "^32.2.0",
+    "electron-builder": "^25.1.8"
+  },
+  "build": {
+    "appId": "com.jhonsu.seguimientoprecios",
+    "productName": "Seguimiento Precios",
+    "directories": {
+      "buildResources": "build",
+      "output": "dist"
+    },
+    "files": [
+      "src/**/*",
+      "package.json"
+    ],
+    "win": {
+      "target": [
+        "msi"
+      ],
+      "icon": "build/icon.ico"
+    },
+    "msi": {
+      "oneClick": false,
+      "perMachine": false,
+      "runAfterFinish": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true
+    },
+    "artifactName": "SeguimientoPrecios-${version}.${ext}"
+  }
+}

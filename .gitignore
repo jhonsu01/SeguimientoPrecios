@@ -1,0 +1,43 @@
+# ---- Secretos / credenciales (NUNCA commitear) ----
+.env
+*.jks
+*.keystore
+credentials.json
+token.json
+key.properties
+
+# ---- Android / Gradle ----
+android-app/.gradle/
+android-app/build/
+android-app/app/build/
+android-app/local.properties
+android-app/.idea/
+android-app/captures/
+*.iml
+.cxx/
+
+# ---- Windows / Electron / Node ----
+windows-app/node_modules/
+windows-app/dist/
+node_modules/
+
+# ---- Orquestacion / temporales ----
+.tmp/
+.codegraph/
+.slurp/
+
+# ---- Orquestacion agentica interna (no publicar en el repo) ----
+CLAUDE.md
+AGENTS.md
+GEMINI.md
+Guia.md
+directives/
+memory/
+.claude/
+
+# ---- Sistema / IDE ----
+.DS_Store
+Thumbs.db
+*.log
+.vscode/
+execution/script.py
