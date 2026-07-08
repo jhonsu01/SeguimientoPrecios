@@ -1,6 +1,5 @@
 // Capa de datos de escritorio: SQLite via sql.js (WASM, sin compilacion nativa).
-// El archivo .db se guarda en userData y es 100% compatible con SQLite estandar
-// (util para el import/export de la Guia).
+// El archivo .db se guarda en userData y es 100% compatible con SQLite estandar.
 const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
@@ -11,6 +10,10 @@ let dbPath = null;
 
 function uuid() {
   return crypto.randomUUID();
+}
+
+function getDbPath() {
+  return dbPath;
 }
 
 async function init(userDataPath) {
@@ -29,6 +32,12 @@ async function init(userDataPath) {
   persistir();
 }
 
+/** Recarga la BD desde disco (tras un import). */
+function recargar() {
+  db = new SQL.Database(fs.readFileSync(dbPath));
+  crearEsquema();
+}
+
 function crearEsquema() {
   db.run(`
     CREATE TABLE IF NOT EXISTS productos (
@@ -41,6 +50,9 @@ function crearEsquema() {
     CREATE TABLE IF NOT EXISTS precios (
       id TEXT PRIMARY KEY, productoId TEXT NOT NULL, precio REAL NOT NULL,
       cantidad REAL, tipoPrecio TEXT, tienda TEXT, fecha INTEGER
+    );
+    CREATE TABLE IF NOT EXISTS alacena (
+      productoId TEXT PRIMARY KEY, cantidadActual REAL, cantidadMinima REAL
     );
     CREATE INDEX IF NOT EXISTS idx_precios_producto ON precios(productoId);
   `);
@@ -82,6 +94,7 @@ function productoSave(p) {
 
 function productoDelete(id) {
   db.run('DELETE FROM precios WHERE productoId=?', [id]);
+  db.run('DELETE FROM alacena WHERE productoId=?', [id]);
   db.run('DELETE FROM productos WHERE id=?', [id]);
   persistir();
 }
@@ -102,14 +115,7 @@ function precioSave(p) {
     [id, p.productoId, p.precio, p.cantidad || 1, p.tipoPrecio || 'unitario',
      p.tienda || '', p.fecha || Date.now()]
   );
-  // Alta implicita de tienda
-  if (p.tienda && p.tienda.trim()) {
-    const existe = all('SELECT 1 FROM tiendas WHERE nombre=? COLLATE NOCASE', [p.tienda.trim()]);
-    if (existe.length === 0) {
-      db.run('INSERT INTO tiendas (id,nombre,ubicacion) VALUES (?,?,?)',
-        [uuid(), p.tienda.trim(), null]);
-    }
-  }
+  registrarTienda(p.tienda);
   persistir();
   return id;
 }
@@ -120,11 +126,60 @@ function precioDelete(id) {
 }
 
 // ---- Tiendas ----
+function registrarTienda(nombre) {
+  if (nombre && nombre.trim()) {
+    const existe = all('SELECT 1 FROM tiendas WHERE nombre=? COLLATE NOCASE', [nombre.trim()]);
+    if (existe.length === 0) {
+      db.run('INSERT INTO tiendas (id,nombre,ubicacion) VALUES (?,?,?)', [uuid(), nombre.trim(), null]);
+    }
+  }
+}
+
 function tiendasList() {
   return all('SELECT * FROM tiendas ORDER BY nombre COLLATE NOCASE ASC');
 }
 
+// ---- Alacena ----
+function alacenaList() {
+  return all('SELECT * FROM alacena');
+}
+
+function alacenaSave(a) {
+  db.run(
+    `INSERT INTO alacena (productoId,cantidadActual,cantidadMinima) VALUES (?,?,?)
+     ON CONFLICT(productoId) DO UPDATE SET
+       cantidadActual=excluded.cantidadActual, cantidadMinima=excluded.cantidadMinima`,
+    [a.productoId, a.cantidadActual || 0, a.cantidadMinima != null ? a.cantidadMinima : 1]
+  );
+  persistir();
+}
+
+// ---- OCR: alta masiva ----
+function agregarDesdeOcr(res) {
+  const productos = productosList();
+  (res.productos || []).forEach((item) => {
+    if (!item.nombre) return;
+    let prod = productos.find((x) => x.nombre.toLowerCase() === String(item.nombre).toLowerCase());
+    if (!prod) {
+      const id = productoSave({
+        nombre: item.nombre,
+        unidadMedida: item.unidad || 'unidad'
+      });
+      prod = { id };
+      productos.push({ id, nombre: item.nombre });
+    }
+    precioSave({
+      productoId: prod.id,
+      precio: Number(item.precio) || 0,
+      cantidad: Number(item.cantidad) || 1,
+      tienda: res.tienda || ''
+    });
+  });
+}
+
 module.exports = {
-  init, productosList, productoSave, productoDelete,
-  preciosAll, precioSave, precioDelete, tiendasList
+  init, recargar, getDbPath,
+  productosList, productoSave, productoDelete,
+  preciosAll, precioSave, precioDelete, tiendasList,
+  alacenaList, alacenaSave, agregarDesdeOcr
 };

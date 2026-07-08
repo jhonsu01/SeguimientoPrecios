@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta http-equiv="Content-Security-Policy"
-        content="default-src 'self'; style-src 'self' 'unsafe-inline'; script-src 'self'" />
+        content="default-src 'self'; style-src 'self' 'unsafe-inline'; script-src 'self'; img-src 'self' data:" />
   <title>Seguimiento Precios</title>
   <link rel="stylesheet" href="styles.css" />
 </head>
@@ -35,7 +35,9 @@
     <nav class="tabs">
       <button class="tab active" data-view="dashboard">Inicio</button>
       <button class="tab" data-view="productos">Productos</button>
+      <button class="tab" data-view="alacena">Alacena</button>
       <button class="tab" data-view="graficos">Graficos</button>
+      <button class="tab" data-view="ajustes">Ajustes</button>
     </nav>
   </header>
 
@@ -44,6 +46,8 @@
   <div id="modal-overlay" class="overlay hidden">
     <div id="modal" class="modal"></div>
   </div>
+
+  <div id="lock-screen" class="lock hidden"></div>
 
   <script src="app.js"></script>
 </body>

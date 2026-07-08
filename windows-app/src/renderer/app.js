@@ -1,6 +1,9 @@
 'use strict';
 
-const state = { productos: [], precios: [], tiendas: [], view: 'dashboard', detalleId: null };
+const state = {
+  productos: [], precios: [], tiendas: [], alacena: [],
+  view: 'dashboard', detalleId: null
+};
 
 const UNIDADES = ['unidad', 'ml', 'L', 'g', 'kg', 'lb'];
 const TIPOS = ['unitario', 'promocion'];
@@ -9,8 +12,7 @@ const CATEGORIAS = ['General', 'Alimentos', 'Bebidas', 'Aseo', 'Hogar', 'Tecnolo
 const $ = (s, r = document) => r.querySelector(s);
 const $$ = (s, r = document) => Array.from(r.querySelectorAll(s));
 
-// Fallback SOLO para previsualizacion en navegador (sin Electron). En produccion
-// window.api lo provee preload.js y este bloque no se ejecuta.
+// Fallback SOLO para previsualizacion en navegador (sin Electron).
 if (!window.api) {
   const D = 86400000;
   const mem = {
@@ -25,17 +27,28 @@ if (!window.api) {
       { id: 'x4', productoId: 'p2', precio: 5200, cantidad: 1, tipoPrecio: 'unitario', tienda: 'D1', fecha: Date.now() - D * 15 },
       { id: 'x5', productoId: 'p2', precio: 4900, cantidad: 1, tipoPrecio: 'promocion', tienda: 'Ara', fecha: Date.now() - D * 2 }
     ],
-    tiendas: [{ id: 't1', nombre: 'Exito' }, { id: 't2', nombre: 'D1' }, { id: 't3', nombre: 'Ara' }]
+    tiendas: [{ id: 't1', nombre: 'Exito' }, { id: 't2', nombre: 'D1' }, { id: 't3', nombre: 'Ara' }],
+    alacena: [{ productoId: 'p1', cantidadActual: 0, cantidadMinima: 1 }]
   };
   const uid = () => 'id' + Math.random().toString(36).slice(2);
   window.api = {
     productosList: async () => mem.productos,
     productoSave: async (p) => { if (!p.id) { p.id = uid(); mem.productos.push(p); } else { Object.assign(mem.productos.find(x => x.id === p.id), p); } return p.id; },
-    productoDelete: async (id) => { mem.productos = mem.productos.filter(x => x.id !== id); mem.precios = mem.precios.filter(x => x.productoId !== id); },
+    productoDelete: async (id) => { mem.productos = mem.productos.filter(x => x.id !== id); mem.precios = mem.precios.filter(x => x.productoId !== id); mem.alacena = mem.alacena.filter(x => x.productoId !== id); },
     preciosAll: async () => mem.precios,
     precioSave: async (p) => { p.id = p.id || uid(); mem.precios.push(p); if (p.tienda && !mem.tiendas.find(t => t.nombre.toLowerCase() === p.tienda.toLowerCase())) mem.tiendas.push({ id: uid(), nombre: p.tienda }); return p.id; },
     precioDelete: async (id) => { mem.precios = mem.precios.filter(x => x.id !== id); },
-    tiendasList: async () => mem.tiendas
+    tiendasList: async () => mem.tiendas,
+    alacenaList: async () => mem.alacena,
+    alacenaSave: async (a) => { const i = mem.alacena.findIndex(x => x.productoId === a.productoId); if (i >= 0) mem.alacena[i] = a; else mem.alacena.push(a); },
+    pinHas: async () => false,
+    pinVerify: async () => true,
+    pinSet: async () => {}, pinClear: async () => {},
+    keyGet: async () => '', keySet: async () => {},
+    ocrScan: async () => ({ cancelado: false, resultado: { tienda: 'Demo Market', productos: [{ nombre: 'Pan tajado', precio: 5200, cantidad: 1, unidad: 'unidad' }, { nombre: 'Huevos AA x12', precio: 12500, cantidad: 1, unidad: 'unidad' }] } }),
+    ocrAdd: async (res) => { (res.productos || []).forEach(it => { const id = uid(); mem.productos.push({ id, nombre: it.nombre, categoria: 'General', unidadMedida: it.unidad || 'unidad' }); mem.precios.push({ id: uid(), productoId: id, precio: it.precio, cantidad: it.cantidad || 1, tipoPrecio: 'unitario', tienda: res.tienda || '', fecha: Date.now() }); }); },
+    backupExport: async () => ({ ok: true, ruta: 'demo-backup.zip' }),
+    backupImport: async () => ({ ok: true })
   };
 }
 
@@ -47,6 +60,7 @@ function esc(s) {
 function moneda(v) {
   return '$' + Number(v).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
+function fmtNum(v) { return Number.isInteger(v) ? String(v) : String(v); }
 function fecha(ms) { return new Date(ms).toLocaleDateString(); }
 function fechaHora(ms) {
   const d = new Date(ms);
@@ -76,18 +90,66 @@ function chipHtml(precios) {
   const [cls, txt] = map[t];
   return `<span class="chip ${cls}">${txt}</span>`;
 }
+function prediccion(precios) {
+  if (precios.length < 2) return null;
+  const ord = [...precios].sort((a, b) => a.fecha - b.fecha);
+  const base = ord[0].fecha;
+  const xs = ord.map(p => (p.fecha - base) / 86400000);
+  const ys = ord.map(p => p.precio);
+  const n = xs.length;
+  const mx = xs.reduce((a, b) => a + b, 0) / n;
+  const my = ys.reduce((a, b) => a + b, 0) / n;
+  let num = 0, den = 0;
+  for (let i = 0; i < n; i++) { num += (xs[i] - mx) * (ys[i] - my); den += (xs[i] - mx) ** 2; }
+  const slope = den === 0 ? 0 : num / den;
+  const inter = my - slope * mx;
+  const pred = Math.max(0, inter + slope * (xs[n - 1] + 7));
+  return { pred, slope };
+}
+function compararTiendas(precios) {
+  const map = {};
+  precios.filter(p => p.tienda).forEach(p => {
+    if (!map[p.tienda] || p.fecha > map[p.tienda].fecha) map[p.tienda] = { precio: p.precio, fecha: p.fecha };
+  });
+  return Object.entries(map).map(([t, v]) => ({ tienda: t, precio: v.precio })).sort((a, b) => a.precio - b.precio);
+}
 
-// ---------- Carga de datos ----------
+// ---------- Carga / arranque ----------
 async function cargar() {
-  const [productos, precios, tiendas] = await Promise.all([
-    window.api.productosList(),
-    window.api.preciosAll(),
-    window.api.tiendasList()
+  const [productos, precios, tiendas, alacena] = await Promise.all([
+    window.api.productosList(), window.api.preciosAll(),
+    window.api.tiendasList(), window.api.alacenaList()
   ]);
   state.productos = productos;
   state.precios = precios;
   state.tiendas = tiendas;
+  state.alacena = alacena;
   render();
+}
+
+async function initApp() {
+  const tienePin = await window.api.pinHas();
+  if (tienePin) mostrarLock();
+  else await cargar();
+}
+
+function mostrarLock() {
+  const lock = $('#lock-screen');
+  lock.classList.remove('hidden');
+  lock.innerHTML = `
+    <h2>🔒 Seguimiento de Precios</h2>
+    <div class="lock-sub">Ingresa tu PIN</div>
+    <input id="lock-pin" type="password" inputmode="numeric" maxlength="8" autofocus />
+    <div class="err" id="lock-err"></div>
+    <button class="btn btn-primary" id="lock-btn">Desbloquear</button>`;
+  const intentar = async () => {
+    const ok = await window.api.pinVerify($('#lock-pin').value);
+    if (ok) { lock.classList.add('hidden'); await cargar(); }
+    else { $('#lock-err').textContent = 'PIN incorrecto'; $('#lock-pin').value = ''; }
+  };
+  $('#lock-btn').addEventListener('click', intentar);
+  $('#lock-pin').addEventListener('keydown', e => { if (e.key === 'Enter') intentar(); });
+  setTimeout(() => $('#lock-pin').focus(), 50);
 }
 
 function go(view, detalleId = null) {
@@ -102,7 +164,9 @@ function render() {
   const c = $('#content');
   if (state.view === 'dashboard') c.innerHTML = viewDashboard();
   else if (state.view === 'productos') c.innerHTML = viewProductos();
+  else if (state.view === 'alacena') c.innerHTML = viewAlacena();
   else if (state.view === 'graficos') c.innerHTML = viewGraficos();
+  else if (state.view === 'ajustes') c.innerHTML = viewAjustes();
   else if (state.view === 'detalle') c.innerHTML = viewDetalle();
   attach();
 }
@@ -150,15 +214,46 @@ function viewProductos() {
   return `
     <div class="header-row">
       <div><h1 class="page-title">Productos</h1></div>
-      <button class="btn btn-primary" id="nuevo-producto">+ Nuevo producto</button>
+      <div>
+        <button class="btn btn-ghost" id="scan-factura">Escanear factura</button>
+        <button class="btn btn-primary" id="nuevo-producto">+ Nuevo producto</button>
+      </div>
     </div>
-    ${state.productos.length ? filas : '<div class="empty">Toca "+ Nuevo producto" para empezar.</div>'}
+    ${state.productos.length ? filas : '<div class="empty">Toca "+ Nuevo producto" o escanea una factura.</div>'}
+  `;
+}
+
+function viewAlacena() {
+  const itemDe = (p) => state.alacena.find(a => a.productoId === p.id) || { productoId: p.id, cantidadActual: 0, cantidadMinima: 1 };
+  const bajo = state.productos.filter(p => { const a = itemDe(p); return a.cantidadActual <= a.cantidadMinima; });
+  const filas = state.productos.map(p => {
+    const a = itemDe(p);
+    const low = a.cantidadActual <= a.cantidadMinima;
+    return `<div class="list-item" style="cursor:default">
+      <div class="grow">
+        <div class="item-name">${esc(p.nombre)}</div>
+        <div class="item-sub ${low ? 'low' : 'ok'}">Stock: ${fmtNum(a.cantidadActual)} &middot; min: ${fmtNum(a.cantidadMinima)} ${esc(p.unidadMedida)}</div>
+      </div>
+      <div class="stepper">
+        <button class="icon-btn" data-stock="${p.id}" data-delta="-1">&minus;</button>
+        <span class="count">${fmtNum(a.cantidadActual)}</span>
+        <button class="icon-btn" data-stock="${p.id}" data-delta="1">+</button>
+        <button class="icon-btn edit" data-alacena="${p.id}" title="Editar minimo">&#9998;</button>
+      </div>
+    </div>`;
+  }).join('');
+
+  return `
+    <h1 class="page-title">Mi Alacena</h1>
+    ${bajo.length ? `<div class="card shopping"><div class="title">&#128722; Lista de compras (${bajo.length})</div><div style="margin-top:6px">${bajo.map(p => esc(p.nombre)).join(', ')}</div></div>` : ''}
+    <div class="section-title">Inventario</div>
+    ${state.productos.length ? filas : '<div class="empty">Agrega productos para gestionar tu inventario.</div>'}
   `;
 }
 
 function viewDetalle() {
   const p = state.productos.find(x => x.id === state.detalleId);
-  if (!p) { return '<div class="empty">Producto no encontrado.</div>'; }
+  if (!p) return '<div class="empty">Producto no encontrado.</div>';
   const pp = preciosDe(p.id);
   const registros = [...pp].sort((a, b) => b.fecha - a.fecha).map(pr => `
     <div class="list-item" style="cursor:default">
@@ -206,23 +301,75 @@ function viewGraficos() {
   const options = state.productos.map(x =>
     `<option value="${x.id}" ${x.id === p.id ? 'selected' : ''}>${esc(x.nombre)}</option>`).join('');
 
-  const stats = pp.length ? `
-    <div class="stat-row">
-      <div class="stat"><div class="value">${moneda(Math.min(...pp.map(x => x.precio)))}</div><div class="label">Minimo</div></div>
-      <div class="stat"><div class="value">${moneda(pp.reduce((s, x) => s + x.precio, 0) / pp.length)}</div><div class="label">Promedio</div></div>
-      <div class="stat"><div class="value">${moneda(Math.max(...pp.map(x => x.precio)))}</div><div class="label">Maximo</div></div>
-    </div>` : '<div class="empty">Este producto aun no tiene precios.</div>';
+  let extra = '';
+  if (pp.length) {
+    extra += `
+      <div class="stat-row">
+        <div class="stat"><div class="value">${moneda(Math.min(...pp.map(x => x.precio)))}</div><div class="label">Minimo</div></div>
+        <div class="stat"><div class="value">${moneda(pp.reduce((s, x) => s + x.precio, 0) / pp.length)}</div><div class="label">Promedio</div></div>
+        <div class="stat"><div class="value">${moneda(Math.max(...pp.map(x => x.precio)))}</div><div class="label">Maximo</div></div>
+      </div>`;
+    const pr = prediccion(pp);
+    if (pr) {
+      const up = pr.slope > 0;
+      extra += `<div class="card">
+        <div class="section-title">Prediccion (IA, ~7 dias)</div>
+        <div class="pred-value ${up ? 'up' : 'down'}">&asymp; ${moneda(pr.pred)}</div>
+        <div class="item-sub">${up ? 'Tendencia al alza' : 'Tendencia a la baja'} segun regresion lineal</div>
+      </div>`;
+    }
+    const rank = compararTiendas(pp);
+    if (rank.length) {
+      extra += `<div class="card">
+        <div class="section-title">Comparacion por tienda</div>
+        ${rank.map((r, i) => `<div class="rank-row ${i === 0 ? 'best' : ''}"><span class="rank-name">${i === 0 ? '&#127942; ' : ''}${esc(r.tienda)}</span><span class="rank-price">${moneda(r.precio)}</span></div>`).join('')}
+      </div>`;
+    }
+  } else {
+    extra = '<div class="empty">Este producto aun no tiene precios.</div>';
+  }
 
   return `
     <h1 class="page-title">Graficos</h1>
-    <p class="page-sub">Evolucion de precios por producto en el tiempo.</p>
+    <p class="page-sub">Evolucion, prediccion y comparacion de tiendas.</p>
     <label>Producto</label>
     <select id="sel-producto" style="max-width:360px">${options}</select>
     <div class="card" style="margin-top:16px">
       <div class="section-title">Variacion reciente ${chipHtml(pp)}</div>
       <canvas id="chart"></canvas>
     </div>
-    ${stats}
+    ${extra}
+  `;
+}
+
+function viewAjustes() {
+  return `
+    <h1 class="page-title">Ajustes</h1>
+    <div class="card setting-block">
+      <h3>OCR de facturas (OpenAI)</h3>
+      <div class="setting-desc">Pega tu API key de OpenAI. Se guarda solo en este equipo y se usa para leer facturas.</div>
+      <input id="aj-key" type="password" placeholder="sk-..." />
+      <div style="margin-top:10px">
+        <button class="btn btn-primary" id="aj-key-save">Guardar key</button>
+        <span class="saved-ok" id="aj-key-ok" style="display:none">Guardada &#10003;</span>
+      </div>
+    </div>
+    <div class="card setting-block">
+      <h3>Seguridad (PIN)</h3>
+      <div class="setting-desc" id="aj-pin-desc">Protege el acceso con un PIN (hash SHA-256).</div>
+      <div id="aj-pin-actions"></div>
+    </div>
+    <div class="card setting-block">
+      <h3>Copia de seguridad</h3>
+      <div class="setting-desc">Exporta o restaura toda tu base de datos (ZIP con SQLite + JSON).</div>
+      <button class="btn btn-primary" id="aj-export">Exportar ZIP</button>
+      <button class="btn btn-ghost" id="aj-import">Importar ZIP</button>
+      <div class="saved-ok" id="aj-backup-msg" style="display:none"></div>
+    </div>
+    <div class="card setting-block">
+      <h3>Acerca de</h3>
+      <div class="setting-desc">Seguimiento de Precios &middot; modo oscuro &middot; offline-first</div>
+    </div>
   `;
 }
 
@@ -231,8 +378,7 @@ function attach() {
   $$('[data-open]').forEach(el => el.addEventListener('click', () => go('detalle', el.dataset.open)));
   $$('[data-edit]').forEach(el => el.addEventListener('click', (e) => {
     e.stopPropagation();
-    const prod = state.productos.find(p => p.id === el.dataset.edit);
-    modalProducto(prod);
+    modalProducto(state.productos.find(p => p.id === el.dataset.edit));
   }));
   $$('[data-del]').forEach(el => el.addEventListener('click', async (e) => {
     e.stopPropagation();
@@ -243,8 +389,15 @@ function attach() {
     await window.api.precioDelete(el.dataset.delprecio);
     await cargar();
   }));
+  $$('[data-stock]').forEach(el => el.addEventListener('click', () => ajustarStock(el.dataset.stock, Number(el.dataset.delta))));
+  $$('[data-alacena]').forEach(el => el.addEventListener('click', () => {
+    modalAlacena(state.productos.find(p => p.id === el.dataset.alacena));
+  }));
+
   const nuevoProd = $('#nuevo-producto');
   if (nuevoProd) nuevoProd.addEventListener('click', () => modalProducto(null));
+  const scan = $('#scan-factura');
+  if (scan) scan.addEventListener('click', runOcr);
   const volver = $('#volver');
   if (volver) volver.addEventListener('click', () => go('productos'));
   const nuevoPrecio = $('#nuevo-precio');
@@ -252,11 +405,63 @@ function attach() {
   const selP = $('#sel-producto');
   if (selP) selP.addEventListener('change', () => { state.detalleId = selP.value; render(); });
 
+  if (state.view === 'ajustes') attachAjustes();
+
   const canvas = $('#chart');
   if (canvas) {
     const id = state.detalleId || (state.productos[0] && state.productos[0].id);
     const pp = id ? preciosDe(id) : [];
     requestAnimationFrame(() => drawChart(canvas, pp));
+  }
+}
+
+async function attachAjustes() {
+  $('#aj-key').value = await window.api.keyGet();
+  $('#aj-key-save').addEventListener('click', async () => {
+    await window.api.keySet($('#aj-key').value);
+    const ok = $('#aj-key-ok'); ok.style.display = 'inline';
+  });
+
+  const tienePin = await window.api.pinHas();
+  const acciones = $('#aj-pin-actions');
+  const desc = $('#aj-pin-desc');
+  if (tienePin) {
+    desc.textContent = 'El acceso a la app esta protegido con PIN.';
+    acciones.innerHTML = '<button class="btn btn-ghost" id="aj-pin-clear">Quitar PIN</button>';
+    $('#aj-pin-clear').addEventListener('click', async () => { await window.api.pinClear(); render(); });
+  } else {
+    acciones.innerHTML = '<button class="btn btn-primary" id="aj-pin-set">Definir PIN</button>';
+    $('#aj-pin-set').addEventListener('click', () => modalPin());
+  }
+
+  $('#aj-export').addEventListener('click', async () => {
+    const r = await window.api.backupExport();
+    const msg = $('#aj-backup-msg');
+    if (r.ok) { msg.textContent = 'Exportado' + (r.ruta ? ': ' + r.ruta : ''); msg.style.display = 'block'; }
+  });
+  $('#aj-import').addEventListener('click', async () => {
+    const r = await window.api.backupImport();
+    if (r.ok) { await cargar(); go('ajustes'); const msg = $('#aj-backup-msg'); if (msg) { msg.textContent = 'Datos importados'; msg.style.display = 'block'; } }
+  });
+}
+
+async function ajustarStock(id, delta) {
+  const a = state.alacena.find(x => x.productoId === id) || { productoId: id, cantidadActual: 0, cantidadMinima: 1 };
+  const nuevo = Math.max(0, a.cantidadActual + delta);
+  await window.api.alacenaSave({ productoId: id, cantidadActual: nuevo, cantidadMinima: a.cantidadMinima });
+  await cargar();
+}
+
+async function runOcr() {
+  openModal('<h3>OCR de factura</h3><div style="padding:8px 0">Selecciona la imagen y espera el analisis...</div>');
+  try {
+    const r = await window.api.ocrScan();
+    closeModal();
+    if (r && r.cancelado) return;
+    modalOcr(r.resultado);
+  } catch (e) {
+    closeModal();
+    modalMensaje('OCR de factura', String((e && e.message) || e));
   }
 }
 
@@ -346,6 +551,11 @@ function closeModal() {
   $('#modal-overlay').classList.add('hidden');
   $('#modal').innerHTML = '';
 }
+function modalMensaje(titulo, msg) {
+  openModal(`<h3>${esc(titulo)}</h3><div style="padding:8px 0">${esc(msg)}</div>
+    <div class="modal-actions"><button class="btn btn-primary" id="m-ok">Cerrar</button></div>`);
+  $('#m-ok').addEventListener('click', closeModal);
+}
 
 function modalProducto(prod) {
   const p = prod || {};
@@ -372,8 +582,7 @@ function modalProducto(prod) {
     const nombre = $('#m-nombre').value.trim();
     if (!nombre) { $('#e-nombre').classList.add('show'); return; }
     await window.api.productoSave({
-      id: p.id,
-      nombre,
+      id: p.id, nombre,
       categoria: $('#m-categoria').value,
       tipo: $('#m-tipo').value.trim(),
       unidadMedida: $('#m-unidad').value,
@@ -410,9 +619,7 @@ function modalPrecio(productoId) {
     if (!precio || precio <= 0) { $('#e-precio').classList.add('show'); return; }
     const cantidad = parseFloat(($('#m-cantidad').value || '1').replace(',', '.')) || 1;
     await window.api.precioSave({
-      productoId,
-      precio,
-      cantidad,
+      productoId, precio, cantidad,
       tipoPrecio: $('#m-tipo').value,
       tienda: $('#m-tienda').value.trim(),
       fecha: Date.now()
@@ -422,7 +629,79 @@ function modalPrecio(productoId) {
   });
 }
 
+function modalAlacena(prod) {
+  const a = state.alacena.find(x => x.productoId === prod.id) || { productoId: prod.id, cantidadActual: 0, cantidadMinima: 1 };
+  openModal(`
+    <h3>${esc(prod.nombre)}</h3>
+    <label>Cantidad actual</label>
+    <input id="m-actual" type="number" step="0.01" value="${a.cantidadActual}" />
+    <label>Cantidad minima (alerta)</label>
+    <input id="m-min" type="number" step="0.01" value="${a.cantidadMinima}" />
+    <div class="modal-actions">
+      <button class="btn btn-ghost" id="m-cancel">Cancelar</button>
+      <button class="btn btn-primary" id="m-save">Guardar</button>
+    </div>
+  `);
+  $('#m-cancel').addEventListener('click', closeModal);
+  $('#m-save').addEventListener('click', async () => {
+    await window.api.alacenaSave({
+      productoId: prod.id,
+      cantidadActual: parseFloat(($('#m-actual').value || '0').replace(',', '.')) || 0,
+      cantidadMinima: parseFloat(($('#m-min').value || '1').replace(',', '.')) || 1
+    });
+    closeModal();
+    await cargar();
+  });
+}
+
+function modalPin() {
+  openModal(`
+    <h3>Definir PIN</h3>
+    <label>PIN (4 a 8 digitos)</label>
+    <input id="m-pin" type="password" inputmode="numeric" maxlength="8" />
+    <label>Confirmar PIN</label>
+    <input id="m-pin2" type="password" inputmode="numeric" maxlength="8" />
+    <div class="field-error" id="e-pin">Revisa el PIN.</div>
+    <div class="modal-actions">
+      <button class="btn btn-ghost" id="m-cancel">Cancelar</button>
+      <button class="btn btn-primary" id="m-save">Guardar</button>
+    </div>
+  `);
+  $('#m-cancel').addEventListener('click', closeModal);
+  $('#m-save').addEventListener('click', async () => {
+    const pin = $('#m-pin').value;
+    const pin2 = $('#m-pin2').value;
+    const err = $('#e-pin');
+    if (pin.length < 4) { err.textContent = 'Usa al menos 4 digitos'; err.classList.add('show'); return; }
+    if (pin !== pin2) { err.textContent = 'Los PIN no coinciden'; err.classList.add('show'); return; }
+    await window.api.pinSet(pin);
+    closeModal();
+    go('ajustes');
+  });
+}
+
+function modalOcr(res) {
+  const items = res.productos || [];
+  const lista = items.length
+    ? items.map(it => `<div style="padding:4px 0">&bull; ${esc(it.nombre)} &mdash; ${moneda(Number(it.precio) || 0)} (${esc(String(it.cantidad || 1))} ${esc(it.unidad || 'unidad')})</div>`).join('')
+    : '<div class="empty">No se detectaron productos.</div>';
+  openModal(`
+    <h3>Factura leida</h3>
+    ${res.tienda ? `<div style="margin-bottom:8px">Tienda: <b>${esc(res.tienda)}</b></div>` : ''}
+    <div style="max-height:320px;overflow:auto">${lista}</div>
+    <div class="modal-actions">
+      <button class="btn btn-ghost" id="ocr-cancel">Cancelar</button>
+      <button class="btn btn-primary" id="ocr-add" ${items.length ? '' : 'disabled'}>Agregar ${items.length}</button>
+    </div>
+  `);
+  $('#ocr-cancel').addEventListener('click', closeModal);
+  const add = $('#ocr-add');
+  if (items.length) {
+    add.addEventListener('click', async () => { await window.api.ocrAdd(res); closeModal(); await cargar(); });
+  }
+}
+
 // ---------- Init ----------
 $$('.tab').forEach(b => b.addEventListener('click', () => go(b.dataset.view)));
 $('#modal-overlay').addEventListener('click', (e) => { if (e.target.id === 'modal-overlay') closeModal(); });
-cargar();
+initApp();
