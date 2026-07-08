@@ -31,20 +31,30 @@ Los binarios se publican automaticamente en la [**ultima release**](https://gith
 
 ---
 
-## Funcionalidades (v0.1.0)
+## Funcionalidades (v0.2.0)
 
 - **CRUD de productos** con categoria, tipo/marca, unidad de medida y codigo de barras.
 - **Registro historico de precios** por producto, tienda y tipo (unitario/promocion).
 - **Graficos de evolucion** del precio en el tiempo (dibujados a medida, sin dependencias pesadas).
 - **Indicadores de tendencia** (sube / baja / estable) y estadisticas min/promedio/maximo.
+- **Comparacion entre tiendas**: ranking de la tienda mas economica por producto.
+- **IA predictiva de precios**: proyeccion a ~7 dias por regresion lineal.
+- **OCR de facturas con OpenAI**: extrae productos y precios de una foto (API key del usuario).
+- **Mi Alacena**: inventario domestico con alertas y lista de compras automatica.
+- **PIN de acceso** con hash SHA-256.
+- **Importar / Exportar** toda la base de datos en ZIP (SQLite + JSON).
 - **Base de datos local SQLite** (offline-first): Room en Android, sql.js en Windows.
 - **UI moderna en modo oscuro** con identidad de marca compartida.
 - **Iconos adaptativos** multi-densidad (Android) y `.ico` multi-tamano (Windows).
 
 ### Roadmap (proximas versiones)
 
-Comparacion entre tiendas · OCR de facturas con OpenAI · Mi Alacena (inventario) ·
-PIN de acceso (SHA-256) · Importar/Exportar base de datos (ZIP) · IA predictiva de precios.
+Escaneo de codigo de barras · sincronizacion opcional en la nube · notificaciones de ofertas.
+
+### OCR: como obtener tu API key de OpenAI
+
+El OCR usa tu propia API key (se guarda **solo en tu dispositivo**, en Ajustes). Generala en
+https://platform.openai.com/api-keys y pegala en la app (Ajustes → OCR de facturas).
 
 ---
 
