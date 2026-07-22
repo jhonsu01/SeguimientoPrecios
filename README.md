@@ -31,10 +31,12 @@ Los binarios se publican automaticamente en la [**ultima release**](https://gith
 
 ---
 
-## Funcionalidades (v0.4.0)
+## Funcionalidades (v0.5.0)
 
 - **CRUD de productos** con categoria, tipo/marca, unidad de medida y codigo de barras.
 - **Buscador** para filtrar productos rapido en Productos y Alacena.
+- **Tiendas reutilizables**: al registrar un precio, el campo Tienda autocompleta y filtra
+  entre las tiendas ya guardadas (o escribes una nueva).
 - **Moneda configurable** (COP, USD, EUR, MXN, ARS, CLP, PEN, BRL, GBP, JPY) con formato por pais.
 - **Escaneo de codigo de barras** con la camara (ML Kit en Android; webcam con **selector de camara** en Windows).
 - **OCR de facturas con OpenAI**: acepta **imagen, PDF y ZIP** (extrae el PDF del ZIP); interpreta

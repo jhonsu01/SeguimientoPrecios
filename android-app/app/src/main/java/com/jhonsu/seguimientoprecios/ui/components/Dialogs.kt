@@ -79,6 +79,54 @@ fun DropdownCampo(
     }
 }
 
+/**
+ * Campo de tienda con autocompletado: al escribir filtra las tiendas guardadas
+ * (buscador), permite elegir una de la lista o escribir una nueva.
+ */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun TiendaAutocomplete(
+    tiendas: List<String>,
+    valor: String,
+    onValor: (String) -> Unit
+) {
+    var abierto by remember { mutableStateOf(false) }
+    val filtradas = if (valor.isBlank()) {
+        tiendas
+    } else {
+        tiendas.filter { it.contains(valor, ignoreCase = true) && !it.equals(valor, ignoreCase = true) }
+    }
+    ExposedDropdownMenuBox(
+        expanded = abierto && filtradas.isNotEmpty(),
+        onExpandedChange = { abierto = it }
+    ) {
+        OutlinedTextField(
+            value = valor,
+            onValueChange = { onValor(it); abierto = true },
+            label = { Text("Tienda") },
+            singleLine = true,
+            trailingIcon = {
+                if (tiendas.isNotEmpty()) {
+                    ExposedDropdownMenuDefaults.TrailingIcon(expanded = abierto)
+                }
+            },
+            modifier = Modifier
+                .fillMaxWidth()
+                .menuAnchor(MenuAnchorType.PrimaryEditable)
+        )
+        if (filtradas.isNotEmpty()) {
+            ExposedDropdownMenu(expanded = abierto, onDismissRequest = { abierto = false }) {
+                filtradas.take(50).forEach { t ->
+                    DropdownMenuItem(
+                        text = { Text(t) },
+                        onClick = { onValor(t); abierto = false }
+                    )
+                }
+            }
+        }
+    }
+}
+
 @Composable
 fun ProductoDialog(
     inicial: Producto?,
@@ -164,7 +212,7 @@ fun PrecioDialog(
     var precioTxt by remember { mutableStateOf("") }
     var cantidadTxt by remember { mutableStateOf("1") }
     var tipoPrecio by remember { mutableStateOf("unitario") }
-    var tienda by remember { mutableStateOf(tiendasSugeridas.firstOrNull() ?: "") }
+    var tienda by remember { mutableStateOf("") }
     var error by remember { mutableStateOf(false) }
 
     AlertDialog(
@@ -190,12 +238,10 @@ fun PrecioDialog(
                     modifier = Modifier.fillMaxWidth()
                 )
                 DropdownCampo("Tipo de precio", TIPOS_PRECIO, tipoPrecio, { tipoPrecio = it })
-                OutlinedTextField(
-                    value = tienda,
-                    onValueChange = { tienda = it },
-                    label = { Text("Tienda") },
-                    singleLine = true,
-                    modifier = Modifier.fillMaxWidth()
+                TiendaAutocomplete(
+                    tiendas = tiendasSugeridas,
+                    valor = tienda,
+                    onValor = { tienda = it }
                 )
             }
         },
