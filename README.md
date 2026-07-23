@@ -31,7 +31,7 @@ Los binarios se publican automaticamente en la [**ultima release**](https://gith
 
 ---
 
-## Funcionalidades (v0.5.0)
+## Funcionalidades (v0.6.0)
 
 - **CRUD de productos** con categoria, tipo/marca, unidad de medida y codigo de barras.
 - **Buscador** para filtrar productos rapido en Productos y Alacena.
@@ -46,7 +46,7 @@ Los binarios se publican automaticamente en la [**ultima release**](https://gith
   Android y Windows; el archivo incluye fecha y hora en el nombre.
 - **Registro historico de precios**, **graficos de evolucion**, **tendencias** y estadisticas.
 - **Comparacion entre tiendas** e **IA predictiva** (regresion lineal, ~7 dias).
-- **Mi Alacena**: inventario domestico con alertas y lista de compras automatica.
+- **Mi Alacena**: inventario domestico con alertas y **lista de compras** colapsable (minimizada por defecto) que se puede **copiar o compartir**.
 - **PIN de acceso** con hash SHA-256.
 - **Base de datos local SQLite** (offline-first): Room en Android, sql.js en Windows.
 - **UI moderna en modo oscuro** e **iconos adaptativos** multi-densidad / `.ico` multi-tamano.

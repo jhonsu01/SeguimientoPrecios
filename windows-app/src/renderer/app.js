@@ -47,6 +47,7 @@ if (!window.api) {
     keyGet: async () => '', keySet: async () => {},
     monedaGet: async () => 'COP', monedaSet: async () => {},
     openExternal: async (url) => { window.open(url, '_blank'); },
+    clipboardWrite: async (text) => { try { await navigator.clipboard.writeText(text); } catch (e) {} },
     ocrScan: async () => ({ cancelado: false, resultado: { tienda: 'Demo Market', productos: [{ nombre: 'Pan tajado', precio: 5200, cantidad: 1, unidad: 'unidad' }, { nombre: 'Huevos AA x12', precio: 12500, cantidad: 1, unidad: 'unidad' }] } }),
     ocrAdd: async (res, sumar) => {
       (res.productos || []).forEach(it => {
@@ -147,6 +148,28 @@ function compararTiendas(precios) {
     if (!map[p.tienda] || p.fecha > map[p.tienda].fecha) map[p.tienda] = { precio: p.precio, fecha: p.fecha };
   });
   return Object.entries(map).map(([t, v]) => ({ tienda: t, precio: v.precio })).sort((a, b) => a.precio - b.precio);
+}
+
+function listaCompras() {
+  const itemDe = (p) => state.alacena.find(a => a.productoId === p.id) || { cantidadActual: 0, cantidadMinima: 1 };
+  return state.productos.filter(p => { const a = itemDe(p); return a.cantidadActual <= a.cantidadMinima; }).map(p => p.nombre);
+}
+function textoListaCompras() {
+  const nombres = listaCompras();
+  return `Lista de compras (${nombres.length}):\n` + nombres.map(n => '- ' + n).join('\n');
+}
+async function copiar(text) {
+  try { if (window.api && window.api.clipboardWrite) { await window.api.clipboardWrite(text); return; } } catch (e) { /* fallback */ }
+  try { await navigator.clipboard.writeText(text); } catch (e) { /* sin portapapeles */ }
+}
+let _toastTimer = null;
+function toast(msg) {
+  let t = document.getElementById('toast');
+  if (!t) { t = document.createElement('div'); t.id = 'toast'; document.body.appendChild(t); }
+  t.textContent = msg;
+  t.className = 'show';
+  clearTimeout(_toastTimer);
+  _toastTimer = setTimeout(() => { t.className = ''; }, 1800);
 }
 
 // ---------- Carga / arranque ----------
@@ -282,7 +305,17 @@ function viewAlacena() {
 
   return `
     <h1 class="page-title">Mi Alacena</h1>
-    ${bajo.length ? `<div class="card shopping"><div class="title">&#128722; Lista de compras (${bajo.length})</div><div style="margin-top:6px">${bajo.map(p => esc(p.nombre)).join(', ')}</div></div>` : ''}
+    ${bajo.length ? `<div class="card shopping">
+      <div class="shop-head">
+        <span class="title" id="shop-toggle-title">&#128722; Lista de compras (${bajo.length})</span>
+        <span class="shop-actions">
+          <button class="icon-btn" id="shop-copy" title="Copiar lista">&#128203;</button>
+          <button class="icon-btn" id="shop-share" title="Compartir lista">&#128228;</button>
+          <button class="icon-btn" id="shop-toggle" title="Ver lista">&#9662;</button>
+        </span>
+      </div>
+      <div id="shop-list" class="shop-list hidden">${bajo.map(p => esc(p.nombre)).join(', ')}</div>
+    </div>` : ''}
     <div class="section-title">Inventario</div>
     ${state.productos.length ? '<input id="buscar-prod" class="buscador" placeholder="Buscar producto..." />' : ''}
     ${state.productos.length ? filas : '<div class="empty">Agrega productos para gestionar tu inventario.</div>'}
@@ -458,6 +491,29 @@ function attach() {
     $$('#content .list-item[data-nombre]').forEach((el) => {
       el.style.display = el.dataset.nombre.includes(q) ? '' : 'none';
     });
+  });
+
+  // Lista de compras: colapsar/expandir + copiar + compartir
+  const shopToggle = $('#shop-toggle');
+  if (shopToggle) {
+    const toggle = () => {
+      const list = $('#shop-list');
+      if (!list) return;
+      const oculto = list.classList.toggle('hidden');
+      shopToggle.innerHTML = oculto ? '&#9662;' : '&#9652;';
+    };
+    shopToggle.addEventListener('click', toggle);
+    const title = $('#shop-toggle-title');
+    if (title) { title.style.cursor = 'pointer'; title.addEventListener('click', toggle); }
+  }
+  const shopCopy = $('#shop-copy');
+  if (shopCopy) shopCopy.addEventListener('click', async () => { await copiar(textoListaCompras()); toast('Lista copiada'); });
+  const shopShare = $('#shop-share');
+  if (shopShare) shopShare.addEventListener('click', async () => {
+    const texto = textoListaCompras();
+    if (navigator.share) { try { await navigator.share({ text: texto }); return; } catch (e) { /* cancelado */ } }
+    await copiar(texto);
+    toast('Lista copiada (lista para compartir)');
   });
 
   if (state.view === 'ajustes') attachAjustes();

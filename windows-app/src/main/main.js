@@ -1,4 +1,4 @@
-const { app, BrowserWindow, ipcMain, dialog, shell } = require('electron');
+const { app, BrowserWindow, ipcMain, dialog, shell, clipboard } = require('electron');
 const path = require('path');
 const db = require('./db');
 const config = require('./config');
@@ -60,6 +60,7 @@ function registrarIpc() {
   ipcMain.handle('moneda:set', (_e, code) => config.setMoneda(code));
 
   ipcMain.handle('open:external', (_e, url) => shell.openExternal(url));
+  ipcMain.handle('clipboard:write', (_e, text) => { clipboard.writeText(String(text || '')); return true; });
 
   // OCR: abre dialogo (imagen/PDF/ZIP) y procesa
   ipcMain.handle('ocr:scan', async () => {

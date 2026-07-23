@@ -31,8 +31,9 @@ contextBridge.exposeInMainWorld('api', {
   monedaGet: () => ipcRenderer.invoke('moneda:get'),
   monedaSet: (code) => ipcRenderer.invoke('moneda:set', code),
 
-  // Enlaces externos
+  // Enlaces externos / portapapeles
   openExternal: (url) => ipcRenderer.invoke('open:external', url),
+  clipboardWrite: (text) => ipcRenderer.invoke('clipboard:write', text),
 
   // Backup
   backupExport: () => ipcRenderer.invoke('backup:export'),

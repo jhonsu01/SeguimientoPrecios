@@ -1,5 +1,8 @@
 package com.jhonsu.seguimientoprecios.ui.screens
 
+import android.content.Intent
+import android.widget.Toast
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -12,9 +15,13 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.ExpandLess
+import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material.icons.filled.Remove
 import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.filled.ShoppingCart
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Card
@@ -35,6 +42,9 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalClipboardManager
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.jhonsu.seguimientoprecios.AppViewModel
@@ -51,6 +61,9 @@ fun AlacenaScreen(vm: AppViewModel, onAbrirProducto: (String) -> Unit) {
     val alacena by vm.alacena.collectAsState()
     var editando by remember { mutableStateOf<Producto?>(null) }
     var busqueda by remember { mutableStateOf("") }
+    var listaExpandida by remember { mutableStateOf(false) }
+    val ctx = LocalContext.current
+    val clipboard = LocalClipboardManager.current
 
     fun itemDe(p: Producto): Alacena =
         alacena.find { it.productoId == p.id } ?: Alacena(p.id, 0.0, 1.0)
@@ -93,25 +106,64 @@ fun AlacenaScreen(vm: AppViewModel, onAbrirProducto: (String) -> Unit) {
             ) {
                 if (bajoMinimo.isNotEmpty() && busqueda.isBlank()) {
                     item {
+                        val textoLista = "Lista de compras (${bajoMinimo.size}):\n" +
+                            bajoMinimo.joinToString("\n") { "- ${it.nombre}" }
                         Card(
                             modifier = Modifier.fillMaxWidth(),
                             colors = CardDefaults.cardColors(containerColor = Ambar.copy(alpha = 0.14f))
                         ) {
-                            Column(Modifier.padding(14.dp)) {
+                            Column(Modifier.padding(horizontal = 14.dp, vertical = 4.dp)) {
                                 Row(verticalAlignment = Alignment.CenterVertically) {
                                     Icon(Icons.Filled.ShoppingCart, null, tint = Ambar, modifier = Modifier.size(20.dp))
                                     Text(
                                         "  Lista de compras (${bajoMinimo.size})",
                                         fontWeight = FontWeight.Bold,
-                                        color = Ambar
+                                        color = Ambar,
+                                        modifier = Modifier
+                                            .weight(1f)
+                                            .clickable { listaExpandida = !listaExpandida }
+                                            .padding(vertical = 10.dp)
+                                    )
+                                    IconButton(
+                                        onClick = {
+                                            clipboard.setText(AnnotatedString(textoLista))
+                                            Toast.makeText(ctx, "Lista copiada", Toast.LENGTH_SHORT).show()
+                                        },
+                                        modifier = Modifier.size(38.dp)
+                                    ) {
+                                        Icon(Icons.Filled.ContentCopy, "Copiar", tint = Ambar, modifier = Modifier.size(18.dp))
+                                    }
+                                    IconButton(
+                                        onClick = {
+                                            val intent = Intent(Intent.ACTION_SEND).apply {
+                                                type = "text/plain"
+                                                putExtra(Intent.EXTRA_TEXT, textoLista)
+                                            }
+                                            ctx.startActivity(Intent.createChooser(intent, "Compartir lista"))
+                                        },
+                                        modifier = Modifier.size(38.dp)
+                                    ) {
+                                        Icon(Icons.Filled.Share, "Compartir", tint = Ambar, modifier = Modifier.size(18.dp))
+                                    }
+                                    IconButton(
+                                        onClick = { listaExpandida = !listaExpandida },
+                                        modifier = Modifier.size(38.dp)
+                                    ) {
+                                        Icon(
+                                            if (listaExpandida) Icons.Filled.ExpandLess else Icons.Filled.ExpandMore,
+                                            "Ver lista",
+                                            tint = Ambar
+                                        )
+                                    }
+                                }
+                                if (listaExpandida) {
+                                    Text(
+                                        bajoMinimo.joinToString(", ") { it.nombre },
+                                        style = MaterialTheme.typography.bodyMedium,
+                                        color = MaterialTheme.colorScheme.onSurface,
+                                        modifier = Modifier.padding(top = 4.dp, bottom = 10.dp)
                                     )
                                 }
-                                Text(
-                                    bajoMinimo.joinToString(", ") { it.nombre },
-                                    style = MaterialTheme.typography.bodyMedium,
-                                    color = MaterialTheme.colorScheme.onSurface,
-                                    modifier = Modifier.padding(top = 6.dp)
-                                )
                             }
                         }
                     }
