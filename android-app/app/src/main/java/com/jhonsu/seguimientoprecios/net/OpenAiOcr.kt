@@ -32,17 +32,22 @@ data class OcrResultado(
 object OpenAiOcr {
 
     private const val ENDPOINT = "https://api.openai.com/v1/chat/completions"
-    private const val MODELO = "gpt-4o-mini"
+    private const val MODELO = "gpt-4o"
 
-    private fun prompt(): String = """Eres un extractor de facturas/recibos. Devuelve SOLO un objeto JSON con esta forma:
-{"tienda": "nombre del establecimiento o vacio", "productos": [{"nombre": "nombre limpio", "precio": 0, "cantidad": 1, "unidad": "unidad|kg|g|L|ml|lb"}]}
+    private fun prompt(): String = """Eres un extractor de facturas/recibos de supermercado. Transcribe EXACTAMENTE lo que ves en la imagen.
+Devuelve SOLO un objeto JSON: {"tienda": "nombre del establecimiento o vacio", "productos": [{"nombre": "...", "precio": 0, "cantidad": 1, "unidad": "unidad|kg|g|L|ml|lb"}]}
 
-REGLAS DE NUMEROS (MUY IMPORTANTE):
-- La moneda es ${Moneda.actual.code}. Muchos paises (Colombia, etc.) usan el PUNTO como separador de MILES y la COMA como separador decimal.
-- Interpreta los montos en ese contexto. Ejemplos: "9.120" = 9120 ; "22.950" = 22950 ; "1.234.567" = 1234567 ; "1.234,50" = 1234.50.
-- Devuelve "precio" como numero real SIN separadores de miles (ej: 9120, NUNCA 9.12).
-- Usa el precio UNITARIO (columna VR. UNIT o similar) cuando exista.
-Normaliza los nombres (sin codigos). Si no hay datos, usa listas/valores vacios."""
+REGLAS CRITICAS (obligatorias):
+- Transcribe UNICAMENTE los productos que REALMENTE aparecen en la imagen. NUNCA inventes ni agregues productos que no esten en la factura.
+- Si la imagen esta borrosa o no puedes leer una linea, OMITELA. Si no puedes leer casi nada, devuelve "productos": [].
+- El nombre debe ser la descripcion tal como aparece en el recibo (puedes expandir abreviaturas obvias, pero sin inventar).
+- Ignora lineas de totales, subtotales, descuentos, promociones, NIT, codigos de barras, cajero y datos del pie.
+
+NUMEROS (moneda ${Moneda.actual.code}, formato latino):
+- El PUNTO es separador de MILES y la coma es decimal. Ej: "8.750" = 8750 ; "10.200" = 10200 ; "22.880" = 22880 ; "1.234,50" = 1234.50.
+- Devuelve "precio" como numero real SIN separadores de miles (ej: 8750, NUNCA 8.75).
+- Si una linea tiene un subrenglon tipo "N UN X valor" (ej: "2 UN X 3.990"), el precio UNITARIO es ese valor (3990) y la cantidad es N. Si no hay subrenglon, usa el valor de la columna como precio y cantidad 1.
+- Para productos por peso (ej: "0,512 KGM X 22.880") el precio es el valor por unidad (22880) y la unidad es kg."""
 
     /** Lee la Uri (imagen/PDF/ZIP) y devuelve (bytes, mime) listos para enviar. */
     fun prepararDesdeUri(context: Context, uri: Uri): Pair<ByteArray, String> {
@@ -87,7 +92,7 @@ Normaliza los nombres (sin codigos). Si no hay datos, usa listas/valores vacios.
         throw IllegalArgumentException("El ZIP no contiene un PDF ni una imagen de factura.")
     }
 
-    private fun escalarImagen(bytes: ByteArray, maxDim: Int = 1400): ByteArray {
+    private fun escalarImagen(bytes: ByteArray, maxDim: Int = 2048): ByteArray {
         val bmp = BitmapFactory.decodeByteArray(bytes, 0, bytes.size)
             ?: throw IllegalArgumentException("Formato de imagen no soportado.")
         val mayor = maxOf(bmp.width, bmp.height)
@@ -96,7 +101,7 @@ Normaliza los nombres (sin codigos). Si no hay datos, usa listas/valores vacios.
             Bitmap.createScaledBitmap(bmp, (bmp.width * f).toInt(), (bmp.height * f).toInt(), true)
         }
         val baos = ByteArrayOutputStream()
-        escalada.compress(Bitmap.CompressFormat.JPEG, 82, baos)
+        escalada.compress(Bitmap.CompressFormat.JPEG, 92, baos)
         return baos.toByteArray()
     }
 
@@ -111,7 +116,8 @@ Normaliza los nombres (sin codigos). Si no hay datos, usa listas/valores vacios.
                 )
             } else {
                 JSONObject().put("type", "image_url").put(
-                    "image_url", JSONObject().put("url", "data:$mime;base64,$b64")
+                    "image_url",
+                    JSONObject().put("url", "data:$mime;base64,$b64").put("detail", "high")
                 )
             }
             val contenido = JSONArray()
@@ -121,7 +127,8 @@ Normaliza los nombres (sin codigos). Si no hay datos, usa listas/valores vacios.
             val body = JSONObject()
                 .put("model", MODELO)
                 .put("response_format", JSONObject().put("type", "json_object"))
-                .put("max_tokens", 2000)
+                .put("temperature", 0)
+                .put("max_tokens", 3000)
                 .put("messages", JSONArray().put(JSONObject().put("role", "user").put("content", contenido)))
 
             val conn = (URL(ENDPOINT).openConnection() as HttpURLConnection).apply {

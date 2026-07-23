@@ -5,15 +5,20 @@ const AdmZip = require('adm-zip');
 const config = require('./config');
 
 function prompt() {
-  return `Eres un extractor de facturas/recibos. Devuelve SOLO un objeto JSON con esta forma:
-{"tienda": "nombre del establecimiento o vacio", "productos": [{"nombre": "nombre limpio", "precio": 0, "cantidad": 1, "unidad": "unidad|kg|g|L|ml|lb"}]}
+  return `Eres un extractor de facturas/recibos de supermercado. Transcribe EXACTAMENTE lo que ves en la imagen.
+Devuelve SOLO un objeto JSON: {"tienda": "nombre del establecimiento o vacio", "productos": [{"nombre": "...", "precio": 0, "cantidad": 1, "unidad": "unidad|kg|g|L|ml|lb"}]}
 
-REGLAS DE NUMEROS (MUY IMPORTANTE):
-- La moneda es ${config.getMoneda()}. Muchos paises (Colombia, etc.) usan el PUNTO como separador de MILES y la COMA como separador decimal.
-- Interpreta los montos en ese contexto. Ejemplos: "9.120" = 9120 ; "22.950" = 22950 ; "1.234.567" = 1234567 ; "1.234,50" = 1234.50.
-- Devuelve "precio" como numero real SIN separadores de miles (ej: 9120, NUNCA 9.12).
-- Usa el precio UNITARIO (columna VR. UNIT o similar) cuando exista.
-Normaliza los nombres (sin codigos). Si no hay datos, usa listas/valores vacios.`;
+REGLAS CRITICAS (obligatorias):
+- Transcribe UNICAMENTE los productos que REALMENTE aparecen en la imagen. NUNCA inventes ni agregues productos que no esten en la factura.
+- Si la imagen esta borrosa o no puedes leer una linea, OMITELA. Si no puedes leer casi nada, devuelve "productos": [].
+- El nombre debe ser la descripcion tal como aparece en el recibo (puedes expandir abreviaturas obvias, pero sin inventar).
+- Ignora lineas de totales, subtotales, descuentos, promociones, NIT, codigos de barras, cajero y datos del pie.
+
+NUMEROS (moneda ${config.getMoneda()}, formato latino):
+- El PUNTO es separador de MILES y la coma es decimal. Ej: "8.750" = 8750 ; "10.200" = 10200 ; "22.880" = 22880 ; "1.234,50" = 1234.50.
+- Devuelve "precio" como numero real SIN separadores de miles (ej: 8750, NUNCA 8.75).
+- Si una linea tiene un subrenglon tipo "N UN X valor" (ej: "2 UN X 3.990"), el precio UNITARIO es ese valor (3990) y la cantidad es N. Si no hay subrenglon, usa el valor de la columna como precio y cantidad 1.
+- Para productos por peso (ej: "0,512 KGM X 22.880") el precio es el valor por unidad (22880) y la unidad es kg.`;
 }
 
 function detectarMime(nombre) {
@@ -49,12 +54,13 @@ async function run(filePath) {
   const { b64, mime } = prepararArchivo(filePath);
   const parteArchivo = mime === 'application/pdf'
     ? { type: 'file', file: { filename: 'factura.pdf', file_data: `data:application/pdf;base64,${b64}` } }
-    : { type: 'image_url', image_url: { url: `data:${mime};base64,${b64}` } };
+    : { type: 'image_url', image_url: { url: `data:${mime};base64,${b64}`, detail: 'high' } };
 
   const body = {
-    model: 'gpt-4o-mini',
+    model: 'gpt-4o',
     response_format: { type: 'json_object' },
-    max_tokens: 2000,
+    temperature: 0,
+    max_tokens: 3000,
     messages: [{ role: 'user', content: [{ type: 'text', text: prompt() }, parteArchivo] }]
   };
 
